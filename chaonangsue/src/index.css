@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
+@layer base {
+  :root {
+    --background: 40 33% 97%;
+    --foreground: 160 30% 10%;
+
+    --card: 40 30% 99%;
+    --card-foreground: 160 30% 10%;
+
+    --popover: 40 30% 99%;
+    --popover-foreground: 160 30% 10%;
+
+    --primary: 160 45% 22%;
+    --primary-foreground: 40 33% 97%;
+
+    --secondary: 35 60% 92%;
+    --secondary-foreground: 160 30% 15%;
+
+    --muted: 40 20% 93%;
+    --muted-foreground: 160 10% 45%;
+
+    --accent: 38 80% 55%;
+    --accent-foreground: 160 30% 10%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 20% 88%;
+    --input: 40 20% 88%;
+    --ring: 160 45% 22%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 160 30% 12%;
+    --sidebar-foreground: 40 20% 90%;
+    --sidebar-primary: 38 80% 55%;
+    --sidebar-primary-foreground: 160 30% 10%;
+    --sidebar-accent: 160 25% 18%;
+    --sidebar-accent-foreground: 40 20% 90%;
+    --sidebar-border: 160 20% 20%;
+    --sidebar-ring: 38 80% 55%;
+
+    /* Custom tokens */
+    --hero-gradient: linear-gradient(135deg, hsl(160 45% 22%), hsl(160 35% 30%));
+    --gold: 38 80% 55%;
+    --gold-light: 38 70% 75%;
+    --success: 142 70% 40%;
+    --warning: 38 92% 50%;
+    --info: 210 80% 55%;
+
+    --font-display: 'Playfair Display', serif;
+    --font-body: 'Noto Sans Thai', sans-serif;
+  }
+
+  .dark {
+    --background: 160 30% 6%;
+    --foreground: 40 20% 93%;
+    --card: 160 25% 10%;
+    --card-foreground: 40 20% 93%;
+    --popover: 160 25% 10%;
+    --popover-foreground: 40 20% 93%;
+    --primary: 38 80% 55%;
+    --primary-foreground: 160 30% 10%;
+    --secondary: 160 20% 15%;
+    --secondary-foreground: 40 20% 90%;
+    --muted: 160 15% 18%;
+    --muted-foreground: 40 10% 60%;
+    --accent: 38 70% 50%;
+    --accent-foreground: 160 30% 10%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 160 15% 20%;
+    --input: 160 15% 20%;
+    --ring: 38 80% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer utilities {
+  .text-gradient-gold {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(38 80% 55%), hsl(38 70% 70%));
+  }
+
+  .bg-hero-gradient {
+    background: var(--hero-gradient);
+  }
+
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-md border border-border/50;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-fade-up {
+    animation: fadeUp 0.6s ease-out forwards;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}

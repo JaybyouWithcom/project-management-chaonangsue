@@ -1,0 +1,8 @@
+ALTER TABLE shops
+DROP FOREIGN KEY fk_shops_user;
+
+ALTER TABLE shops
+ADD CONSTRAINT fk_shops_user
+FOREIGN KEY (user_id) REFERENCES users(user_id)
+ON DELETE RESTRICT
+ON UPDATE CASCADE;

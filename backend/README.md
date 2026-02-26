@@ -28,3 +28,45 @@
 3. ทำ controller + route ใน `src/api`
 4. ค่อยเติม implementation DB/Cache ใน `src/infrastructure`
 5. เพิ่ม test ตามระดับที่เหมาะสม
+
+## Auth ที่เพิ่มแล้ว
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me` (ต้องส่ง `Authorization: Bearer <token>`)
+
+หมายเหตุ: ผู้ใช้ใหม่จะเป็น `Customer` เสมอ (ตัด role `Lender` ออกแล้ว)
+
+ตัวอย่าง `.env`:
+
+```bash
+PORT=4000
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=chaonangsue
+JWT_SECRET=change_this_secret
+JWT_EXPIRES_IN=7d
+BCRYPT_SALT_ROUNDS=12
+```
+
+## Database Scripts
+
+- สร้างตารางผู้ใช้: `scripts/create-users-table.sql`
+- สร้างตารางร้านค้า (1 user มีหลายร้าน): `scripts/create-shops-table.sql`
+- migrate บทบาทเก่า `Lender` -> `Customer`: `scripts/migrate-merge-lender-role.sql`
+- เพิ่ม soft delete ให้ users: `scripts/migrate-add-user-soft-delete.sql`
+- เพิ่ม soft delete ให้ shops: `scripts/migrate-add-shop-soft-delete.sql`
+- เปลี่ยน FK shops.user_id ให้ไม่ cascade delete: `scripts/migrate-shops-fk-restrict.sql`
+- ตัวอย่าง soft delete user: `scripts/soft-delete-user.sql`
+- ตัวอย่าง hard delete user (ใช้เฉพาะ admin flow): `scripts/hard-delete-user.sql`
+- ตัวอย่าง soft delete shop: `scripts/soft-delete-shop.sql`
+- ตัวอย่าง restore shop: `scripts/restore-shop.sql`
+- ตัวอย่าง hard delete shop (ใช้เฉพาะ admin flow): `scripts/hard-delete-shop.sql`
+- ลบ trigger ที่บล็อก hard delete (ถ้าเคยเปิด): `scripts/remove-prevent-hard-delete-users-trigger.sql`
+
+หมายเหตุ:
+- auth/query หลักจะอ่านเฉพาะผู้ใช้ที่ `deleted_at IS NULL`
+- shop query หลักควรอ่านเฉพาะร้านที่ `deleted_at IS NULL`
+- แนวทางที่แนะนำคือ soft delete เป็นค่าเริ่มต้น และ hard delete ผ่าน admin flow เท่านั้น

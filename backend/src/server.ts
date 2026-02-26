@@ -1,13 +1,11 @@
-import { createServer } from 'node:http';
+import 'dotenv/config';
 
-const port = Number(process.env.PORT ?? 4000);
+import { env } from './infrastructure/config/env.js';
+import { buildApp } from './app.js';
 
-const server = createServer((_req, res) => {
-  res.writeHead(200, { 'content-type': 'application/json' });
-  res.end(JSON.stringify({ service: 'chaonangsue-backend', status: 'ok' }));
-});
+const app = buildApp();
 
-server.listen(port, () => {
+app.listen(env.port, () => {
   // eslint-disable-next-line no-console
-  console.log(`Backend service running on http://localhost:${port}`);
+  console.log(`Backend service running on http://localhost:${env.port}`);
 });

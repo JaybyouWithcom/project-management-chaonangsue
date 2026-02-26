@@ -6,7 +6,7 @@ export interface Book {
   genre: string;
   cover: string;
   condition: "ใหม่มาก" | "ดีมาก" | "ดี" | "พอใช้";
-  pricePerDay: number;
+  minRentalPrice: number; // เปลี่ยนจาก pricePerDay เป็น minRentalPrice (ค่าเช่าขั้นต่ำ 15 วัน)
   deposit: number;
   description: string;
   available: boolean;
@@ -39,49 +39,49 @@ export const mockBooks: Book[] = [
   {
     id: "1", title: "เพราะเราคู่กัน", author: "JittiRain", isbn: "978-616-xxx-001",
     genre: "นิยาย", cover: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=300&h=400&fit=crop",
-    condition: "ใหม่มาก", pricePerDay: 15, deposit: 200, description: "นิยายรักโรแมนติกขายดีอันดับ 1",
+    condition: "ใหม่มาก", minRentalPrice: 90, deposit: 150, description: "นิยายรักโรแมนติกขายดีอันดับ 1", // (150 * 2) * 0.3 = 90
     available: true, rating: 4.8, totalRentals: 128
   },
   {
     id: "2", title: "Atomic Habits", author: "James Clear", isbn: "978-616-xxx-002",
     genre: "พัฒนาตัวเอง", cover: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=300&h=400&fit=crop",
-    condition: "ดีมาก", pricePerDay: 20, deposit: 300, description: "เปลี่ยนนิสัยเล็กๆ สร้างผลลัพธ์มหาศาล",
+    condition: "ดีมาก", minRentalPrice: 78, deposit: 130, description: "เปลี่ยนนิสัยเล็กๆ สร้างผลลัพธ์มหาศาล", // (130 * 2) * 0.3 = 78
     available: true, rating: 4.9, totalRentals: 256
   },
   {
     id: "3", title: "Sapiens", author: "Yuval Noah Harari", isbn: "978-616-xxx-003",
     genre: "วิทยาศาสตร์", cover: "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=400&fit=crop",
-    condition: "ดี", pricePerDay: 18, deposit: 250, description: "ประวัติศาสตร์โดยย่อของมนุษยชาติ",
+    condition: "ดี", minRentalPrice: 126, deposit: 210, description: "ประวัติศาสตร์โดยย่อของมนุษยชาติ", // (210 * 2) * 0.3 = 126
     available: false, rating: 4.7, totalRentals: 198
   },
   {
     id: "4", title: "คิดเป็น รวยเป็น", author: "Napoleon Hill", isbn: "978-616-xxx-004",
     genre: "ธุรกิจ", cover: "https://images.unsplash.com/photo-1524578271613-d550eacf6090?w=300&h=400&fit=crop",
-    condition: "ดีมาก", pricePerDay: 12, deposit: 180, description: "หนังสือธุรกิจคลาสสิกที่ทุกคนควรอ่าน",
+    condition: "ดีมาก", minRentalPrice: 45, deposit: 75, description: "หนังสือธุรกิจคลาสสิกที่ทุกคนควรอ่าน", // (75 * 2) * 0.3 = 45
     available: true, rating: 4.5, totalRentals: 89
   },
   {
     id: "5", title: "เมื่อวานนี้ ฉันได้ตาย", author: "พศิน อินทรวงค์", isbn: "978-616-xxx-005",
     genre: "จิตวิทยา", cover: "https://images.unsplash.com/photo-1589998059171-988d887df646?w=300&h=400&fit=crop",
-    condition: "ใหม่มาก", pricePerDay: 15, deposit: 200, description: "การเดินทางค้นหาตัวเองผ่านประสบการณ์ใกล้ตาย",
+    condition: "ใหม่มาก", minRentalPrice: 36, deposit: 60, description: "การเดินทางค้นหาตัวเองผ่านประสบการณ์ใกล้ตาย", // (60 * 2) * 0.3 = 36
     available: true, rating: 4.6, totalRentals: 145
   },
   {
     id: "6", title: "The Art of War", author: "Sun Tzu", isbn: "978-616-xxx-006",
     genre: "ประวัติศาสตร์", cover: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=400&fit=crop",
-    condition: "พอใช้", pricePerDay: 10, deposit: 150, description: "ตำราพิชัยสงครามอมตะ",
+    condition: "พอใช้", minRentalPrice: 96, deposit: 160, description: "ตำราพิชัยสงครามอมตะ", // (160 * 2) * 0.3 = 96
     available: true, rating: 4.4, totalRentals: 67
   },
   {
     id: "7", title: "Harry Potter เล่ม 1", author: "J.K. Rowling", isbn: "978-616-xxx-007",
     genre: "นิยาย", cover: "https://images.unsplash.com/photo-1618666012174-83b441c0bc76?w=300&h=400&fit=crop",
-    condition: "ดีมาก", pricePerDay: 15, deposit: 200, description: "เด็กชายผู้รอดชีวิตจากศาสตร์มืด",
+    condition: "ดีมาก", minRentalPrice: 120, deposit: 200, description: "เด็กชายผู้รอดชีวิตจากศาสตร์มืด", // (200 * 2) * 0.3 = 120
     available: true, rating: 4.9, totalRentals: 312
   },
   {
     id: "8", title: "แด่เธอผู้ไม่ยอมแพ้", author: "วิลาศ มณีวัต", isbn: "978-616-xxx-008",
     genre: "พัฒนาตัวเอง", cover: "https://images.unsplash.com/photo-1476275466078-4007374efbbe?w=300&h=400&fit=crop",
-    condition: "ดี", pricePerDay: 12, deposit: 180, description: "แรงบันดาลใจสำหรับวันที่ท้อแท้",
+    condition: "ดี", minRentalPrice: 78, deposit: 130, description: "แรงบันดาลใจสำหรับวันที่ท้อแท้", // (130 * 2) * 0.3 = 78
     available: true, rating: 4.3, totalRentals: 91
   },
 ];

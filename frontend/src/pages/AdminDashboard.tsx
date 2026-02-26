@@ -42,7 +42,7 @@ const AdminDashboard = () => {
       <div className="container mx-auto px-4 py-8 flex-1">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="font-display text-3xl md:text-4xl font-bold">แดชบอร์ดผู้ดูแลระบบ</h1>
+            <h1 className="font-display text-3xl md:text-4xl font-bold">แดชบอร์ดร้าน</h1>
             <p className="text-muted-foreground mt-1">จัดการคลัง คำสั่งเช่า และรายได้</p>
           </div>
           <Dialog>

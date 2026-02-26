@@ -22,7 +22,7 @@ const BookCard = ({ book }: BookCardProps) => (
       {!book.available && (
         <div className="absolute inset-0 bg-foreground/50 flex items-center justify-center">
           <span className="bg-destructive text-destructive-foreground px-3 py-1 rounded-full text-sm font-semibold">
-            ถูกเช่าแล้ว
+            เช่าหมดแล้ว
           </span>
         </div>
       )}
@@ -37,7 +37,7 @@ const BookCard = ({ book }: BookCardProps) => (
       <p className="text-sm text-muted-foreground mt-1">{book.author}</p>
       <div className="flex items-center justify-between mt-3">
         <span className="text-primary font-bold">
-          ฿{book.pricePerDay}<span className="text-xs text-muted-foreground font-normal">/วัน</span>
+          ฿{book.minRentalPrice}
         </span>
         <div className="flex items-center gap-1 text-sm text-accent">
           <Star className="h-3.5 w-3.5 fill-current" />

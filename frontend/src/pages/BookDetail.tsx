@@ -1,21 +1,40 @@
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Star, Calendar, Shield, BookOpen } from "lucide-react";
+import { ArrowLeft, Star, Calendar, Shield, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { mockBooks } from "@/lib/mockData";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
+// กำหนด Interface สำหรับข้อมูลหนังสือ (หากมี Interface นี้ใน mockData อยู่แล้ว สามารถ import มาใช้แทนได้)
+export interface Book {
+  id: string;
+  cover: string;
+  title: string;
+  genre: string;
+  condition: string;
+  author: string;
+  isbn: string;
+  rating: number;
+  totalRentals: number;
+  description: string;
+  deposit: number;
+  available: boolean;
+}
+
 const BookDetail = () => {
-  const { id } = useParams();
-  const book = mockBooks.find((b) => b.id === id);
+  // กำหนด Type ให้พารามิเตอร์ที่ได้จาก URL
+  const { id } = useParams<{ id: string }>();
+  
+  // ค้นหาหนังสือและระบุ Type
+  const book = mockBooks.find((b: Book) => b.id === id) as Book | undefined;
+  
   const { toast } = useToast();
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  
+  // กำหนด Type ของ State ให้รับค่าแค่ 15, 30 หรือ null เท่านั้น
+  const [selectedPlan, setSelectedPlan] = useState<15 | 30 | null>(null);
 
   if (!book) {
     return (
@@ -34,19 +53,24 @@ const BookDetail = () => {
     );
   }
 
-  const days = startDate && endDate
-    ? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000))
-    : 0;
-  const totalPrice = days * book.pricePerDay;
+  // ระบุ Type ของพารามิเตอร์และค่า Return ของฟังก์ชัน
+  const calculateRent = (days: 15 | 30): number => {
+    if (days === 15) return (book.deposit * 2) * 0.3;
+    if (days === 30) return book.deposit;
+    return 0;
+  };
 
-  const handleBooking = () => {
-    if (!startDate || !endDate) {
-      toast({ title: "กรุณาเลือกวันรับ-คืน", variant: "destructive" });
+  const rentPrice: number = selectedPlan ? calculateRent(selectedPlan) : 0;
+  const totalPrice: number = rentPrice + book.deposit;
+
+  const handleBooking = (): void => {
+    if (!selectedPlan) {
+      toast({ title: "กรุณาเลือกแผนการเช่า", variant: "destructive" });
       return;
     }
     toast({
       title: "จองสำเร็จ! 🎉",
-      description: `${book.title} — ${days} วัน รวม ฿${totalPrice + book.deposit} (รวมมัดจำ)`,
+      description: `${book.title} — เช่า ${selectedPlan} วัน รวม ฿${totalPrice} (รวมมัดจำแล้ว)`,
     });
   };
 
@@ -86,31 +110,69 @@ const BookDetail = () => {
 
             <p className="text-foreground/80 leading-relaxed">{book.description}</p>
 
-            {/* Pricing */}
-            <div className="bg-card rounded-xl border p-5 space-y-4">
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-display font-bold text-primary">฿{book.pricePerDay}</span>
-                <span className="text-muted-foreground">/ วัน</span>
+            {/* Pricing & Plan Selection */}
+            <div className="bg-card rounded-xl border p-5 space-y-5">
+              
+              <div>
+                <h3 className="text-lg font-bold mb-1">เลือกแผนการเช่า</h3>
+                <p className="text-sm text-muted-foreground">
+                  ค่ามัดจำ: ฿{book.deposit} <span className="text-xs">(ได้รับคืนเมื่อส่งคืนหนังสือในสภาพเดิม)</span>
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">มัดจำ: ฿{book.deposit} (ได้คืนเมื่อคืนหนังสือ)</p>
 
+              {/* Plan Cards */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs text-muted-foreground">วันรับหนังสือ</Label>
-                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                {/* 15 Days Card */}
+                <div 
+                  onClick={() => setSelectedPlan(15)}
+                  className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    selectedPlan === 15 
+                      ? "border-primary bg-primary/5" 
+                      : "border-muted hover:border-primary/50"
+                  }`}
+                >
+                  {selectedPlan === 15 && (
+                    <CheckCircle2 className="absolute top-3 right-3 h-5 w-5 text-primary" />
+                  )}
+                  <h4 className="font-bold text-lg mb-1">15 วัน</h4>
+                  <p className="text-sm text-muted-foreground">
+                    ค่าเช่า ฿{calculateRent(15)}
+                  </p>
                 </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">วันคืนหนังสือ</Label>
-                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+
+                {/* 30 Days Card */}
+                <div 
+                  onClick={() => setSelectedPlan(30)}
+                  className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    selectedPlan === 30 
+                      ? "border-primary bg-primary/5" 
+                      : "border-muted hover:border-primary/50"
+                  }`}
+                >
+                  {selectedPlan === 30 && (
+                    <CheckCircle2 className="absolute top-3 right-3 h-5 w-5 text-primary" />
+                  )}
+                  <h4 className="font-bold text-lg mb-1">30 วัน</h4>
+                  <p className="text-sm text-muted-foreground">
+                    ค่าเช่า ฿{calculateRent(30)}
+                  </p>
                 </div>
               </div>
 
-              {days > 0 && (
-                <div className="bg-secondary/50 rounded-lg p-3 text-sm space-y-1">
-                  <div className="flex justify-between"><span>ค่าเช่า ({days} วัน)</span><span>฿{totalPrice}</span></div>
-                  <div className="flex justify-between"><span>มัดจำ</span><span>฿{book.deposit}</span></div>
-                  <div className="flex justify-between font-bold text-primary border-t pt-1 mt-1">
-                    <span>รวมทั้งหมด</span><span>฿{totalPrice + book.deposit}</span>
+              {/* Summary */}
+              {selectedPlan && (
+                <div className="bg-secondary/50 rounded-lg p-4 text-sm space-y-2 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">ค่าเช่า ({selectedPlan} วัน)</span>
+                    <span>฿{rentPrice}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">มัดจำ</span>
+                    <span>฿{book.deposit}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-base border-t pt-2 mt-2">
+                    <span>ยอดชำระสุทธิ</span>
+                    <span className="text-primary">฿{totalPrice}</span>
                   </div>
                 </div>
               )}

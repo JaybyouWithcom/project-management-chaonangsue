@@ -11,7 +11,7 @@ const Footer = () => (
             <span className="font-display text-lg font-bold">ChaoNangsue.com</span>
           </div>
           <p className="text-primary-foreground/70 text-sm leading-relaxed">
-            แพลตฟอร์มเช่าหนังสือออนไลน์ ลดค่าใช้จ่าย เพิ่มโอกาสเข้าถึงความรู้ สนับสนุนเศรษฐกิจแบ่งปัน
+            แพลตฟอร์มเช่าหนังสือออนไลน์ ลดค่าใช้จ่าย แบ่งปันความรู้และความสนุก
           </p>
         </div>
         <div>
@@ -25,9 +25,9 @@ const Footer = () => (
         <div>
           <h4 className="font-display font-semibold mb-4">ติดต่อเรา</h4>
           <ul className="space-y-2 text-sm text-primary-foreground/70">
-            <li>อีเมล: support@chaonang sue.com</li>
+            <li>อีเมล: support@chaonangsue.com</li>
             <li>โทร: 02-xxx-xxxx</li>
-            <li>Line: @chaonang sue</li>
+            <li>Line: @chaonangsue</li>
           </ul>
         </div>
       </div>

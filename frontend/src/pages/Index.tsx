@@ -9,7 +9,7 @@ import heroImage from "@/assets/hero-books.jpg";
 
 const steps = [
   { icon: Search, title: "ค้นหาหนังสือ", desc: "เลือกหนังสือที่ชอบจากคลังกว่า 1,000 เล่ม" },
-  { icon: BookOpen, title: "จองและกำหนดวัน", desc: "เลือกวันรับ-คืน ตามความสะดวก" },
+  { icon: BookOpen, title: "เลือกแผนการเช่า", desc: "15 วัน หรือ 30 วัน ตามความสะดวก" },
   { icon: CreditCard, title: "ชำระเงินง่ายๆ", desc: "QR PromptPay, บัตรเครดิต หรือ e-Wallet" },
   { icon: Truck, title: "รับหนังสือถึงมือ", desc: "จัดส่งถึงบ้าน พร้อมติดตามสถานะ" },
 ];
@@ -32,41 +32,28 @@ const Index = () => {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0">
           <img src={heroImage} alt="Book reading nook" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/90 via-primary/70 to-primary/40" />
+          {/* ปรับ Gradient ให้คลุมเท่าๆ กันเพื่อให้ข้อความตรงกลางอ่านง่ายขึ้น */}
+          <div className="absolute inset-0 bg-primary/70 mix-blend-multiply" />
+          <div className="absolute inset-0 bg-gradient-to-b from-primary/50 to-primary/90" />
         </div>
-        <div className="relative container mx-auto px-4 py-24 md:py-36">
-          <div className="max-w-2xl">
+        {/* จัดให้อยู่กึ่งกลางด้วย flex, items-center และ text-center */}
+        <div className="relative container mx-auto px-4 py-24 md:py-36 flex flex-col items-center text-center">
+          <div className="max-w-3xl mx-auto">
             <h1 className="font-display text-4xl md:text-6xl font-bold text-primary-foreground leading-tight animate-fade-up">
               เช่าหนังสือออนไลน์
-              <span className="block text-gradient-gold mt-2">ประหยัด คุ้มค่า ใส่ใจโลก</span>
+              <span className="block text-gradient-gold mt-2">ประหยัด คุ้มค่า ปลอดภัย</span>
             </h1>
-            <p className="mt-6 text-lg text-primary-foreground/80 max-w-lg leading-relaxed">
+            <p className="mt-6 mx-auto text-lg text-primary-foreground/80 max-w-lg leading-relaxed">
               อ่านหนังสือดีๆ ในราคาเช่าเริ่มต้นเพียง ฿10/วัน ส่งถึงบ้าน พร้อมระบบติดตามและคืนง่ายๆ
             </p>
-            <div className="flex flex-wrap gap-4 mt-8">
+            {/* ใช้ justify-center เพื่อให้ปุ่มอยู่ตรงกลาง */}
+            <div className="flex flex-wrap justify-center gap-4 mt-8">
               <Button asChild size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90 font-semibold text-base px-8">
                 <Link to="/browse">
                   เริ่มค้นหาหนังสือ <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild size="lg" variant="outline" className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10 text-base">
-                <Link to="/admin">สำหรับร้านค้า</Link>
-              </Button>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats */}
-      <section className="bg-card border-b">
-        <div className="container mx-auto px-4 py-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {stats.map((s) => (
-              <div key={s.label} className="text-center">
-                <div className="text-2xl md:text-3xl font-display font-bold text-primary">{s.value}</div>
-                <div className="text-sm text-muted-foreground mt-1">{s.label}</div>
-              </div>
-            ))}
           </div>
         </div>
       </section>
@@ -129,6 +116,20 @@ const Index = () => {
                   <h3 className="font-display font-semibold text-lg">{usp.title}</h3>
                   <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{usp.desc}</p>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Stats */}
+      <section className="bg-card border-b">
+        <div className="container mx-auto px-4 py-14">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {stats.map((s) => (
+              <div key={s.label} className="text-center">
+                <div className="text-2xl md:text-3xl font-display font-bold text-primary">{s.value}</div>
+                <div className="text-sm text-muted-foreground mt-1">{s.label}</div>
               </div>
             ))}
           </div>

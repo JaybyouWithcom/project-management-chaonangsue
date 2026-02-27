@@ -52,6 +52,14 @@ BCRYPT_SALT_ROUNDS=12
 ```
 
 
+
+## Troubleshooting (พบบ่อยระหว่างพัฒนา)
+
+- ถ้า frontend แจ้ง `ERR_CONNECTION_REFUSED` ที่ `http://localhost:4000` แปลว่า backend ยังไม่รันหรือรันไม่สำเร็จ
+- ให้คัดลอก env ก่อน: `cp .env.example .env` แล้วใส่ค่าจริงของ DB/JWT
+- รัน backend ด้วย `npm run dev` แล้วเช็คว่าเห็น log `Backend service running on http://localhost:4000`
+- ทดสอบเร็วด้วย `GET /health` ต้องได้ `200`
+
 ## API v1 (MVP สำหรับ Frontend)
 
 Response มาตรฐาน:

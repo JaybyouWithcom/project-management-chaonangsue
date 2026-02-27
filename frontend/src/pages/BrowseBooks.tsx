@@ -1,13 +1,47 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import BookCard from "@/components/BookCard";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { mockBooks, genres, conditions } from "@/lib/mockData";
+import { conditions, genres, type Book as MockBook } from "@/lib/mockData";
+import { apiGet } from "@/lib/api";
+
+interface ApiBook {
+  bookId: number;
+  title: string;
+  imagePath: string;
+  author: string;
+  isbn: string | null;
+  genre: string | null;
+  bookCondition: string | null;
+  rentalPrice: string;
+  depositPrice: string;
+  status: "Available" | "Rented";
+  ownerName: string;
+  description: string | null;
+}
+
+const toUiBook = (book: ApiBook): MockBook => ({
+  id: String(book.bookId),
+  title: book.title,
+  author: book.author,
+  isbn: book.isbn ?? "-",
+  genre: book.genre ?? "อื่นๆ",
+  cover: book.imagePath,
+  condition: book.bookCondition ?? "3",
+  minRentalPrice: Number(book.rentalPrice),
+  pricePerDay: Number(book.rentalPrice),
+  deposit: Number(book.depositPrice),
+  description: book.description ?? "",
+  available: book.status === "Available",
+  rating: 4.5,
+  totalRentals: 0,
+});
 
 const BrowseBooks = () => {
   const [search, setSearch] = useState("");
@@ -15,22 +49,27 @@ const BrowseBooks = () => {
   const [selectedCondition, setSelectedCondition] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("popular");
 
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["books", search, selectedGenre],
+    queryFn: async () => {
+      const query = new URLSearchParams();
+      if (search) query.set("q", search);
+      if (selectedGenre !== "all") query.set("genre", selectedGenre);
+      query.set("limit", "50");
+      const response = await apiGet<{ books: ApiBook[] }>(`/api/books?${query.toString()}`);
+      return response.data.books.map(toUiBook);
+    },
+  });
+
   const filtered = useMemo(() => {
-    let books = [...mockBooks];
-    if (search) {
-      const q = search.toLowerCase();
-      books = books.filter(
-        (b) => b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q) || b.isbn.includes(q)
-      );
-    }
-    if (selectedGenre !== "all") books = books.filter((b) => b.genre === selectedGenre);
+    let books = [...(data ?? [])];
     if (selectedCondition !== "all") books = books.filter((b) => b.condition === selectedCondition);
     if (sortBy === "price-asc") books.sort((a, b) => a.pricePerDay - b.pricePerDay);
     else if (sortBy === "price-desc") books.sort((a, b) => b.pricePerDay - a.pricePerDay);
     else if (sortBy === "rating") books.sort((a, b) => b.rating - a.rating);
     else books.sort((a, b) => b.totalRentals - a.totalRentals);
     return books;
-  }, [search, selectedGenre, selectedCondition, sortBy]);
+  }, [data, selectedCondition, sortBy]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -38,7 +77,6 @@ const BrowseBooks = () => {
       <div className="container mx-auto px-4 py-8 flex-1">
         <h1 className="font-display text-3xl md:text-4xl font-bold mb-6">ค้นหาหนังสือ</h1>
 
-        {/* Search & Filters */}
         <div className="bg-card rounded-xl border p-4 mb-6 space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -75,34 +113,36 @@ const BrowseBooks = () => {
               </SelectContent>
             </Select>
           </div>
-          {/* Active filters */}
           <div className="flex flex-wrap gap-2">
             {selectedGenre !== "all" && (
-              <Badge variant="secondary" className="cursor-pointer" onClick={() => setSelectedGenre("all")}>
-                {selectedGenre} ✕
-              </Badge>
+              <Badge variant="secondary" className="cursor-pointer" onClick={() => setSelectedGenre("all")}>{selectedGenre} ✕</Badge>
             )}
             {selectedCondition !== "all" && (
-              <Badge variant="secondary" className="cursor-pointer" onClick={() => setSelectedCondition("all")}>
-                {selectedCondition} ✕
-              </Badge>
+              <Badge variant="secondary" className="cursor-pointer" onClick={() => setSelectedCondition("all")}>{selectedCondition} ✕</Badge>
             )}
           </div>
         </div>
 
-        {/* Results */}
-        <p className="text-sm text-muted-foreground mb-4">พบ {filtered.length} เล่ม</p>
-        {filtered.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-            {filtered.map((book) => (
-              <BookCard key={book.id} book={book} />
-            ))}
-          </div>
+        {isLoading ? (
+          <p className="text-muted-foreground">กำลังโหลดหนังสือ...</p>
+        ) : isError ? (
+          <p className="text-destructive">โหลดข้อมูลไม่สำเร็จ กรุณาตรวจสอบ backend API</p>
         ) : (
-          <div className="text-center py-20 text-muted-foreground">
-            <Search className="h-12 w-12 mx-auto mb-4 opacity-30" />
-            <p>ไม่พบหนังสือที่ค้นหา ลองเปลี่ยนคำค้นหาดู</p>
-          </div>
+          <>
+            <p className="text-sm text-muted-foreground mb-4">พบ {filtered.length} เล่ม</p>
+            {filtered.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                {filtered.map((book) => (
+                  <BookCard key={book.id} book={book} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-20 text-muted-foreground">
+                <Search className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                <p>ไม่พบหนังสือที่ค้นหา ลองเปลี่ยนคำค้นหาดู</p>
+              </div>
+            )}
+          </>
         )}
       </div>
       <Footer />

@@ -16,6 +16,20 @@ export const buildApp = () => {
 
   app.use(express.json());
 
+
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
+
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(204);
+      return;
+    }
+
+    next();
+  });
+
   const userRepository = new MySqlUserRepository();
   const authService = new AuthService(userRepository);
   const authController = new AuthController(authService);

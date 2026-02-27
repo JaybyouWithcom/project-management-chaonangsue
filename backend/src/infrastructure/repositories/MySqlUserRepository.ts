@@ -1,7 +1,7 @@
 import type { RowDataPacket } from 'mysql2';
 
 import type { CreateUserInput, User } from '../../domain/entities/User.js';
-import type { UserRepository } from '../../domain/repositories/UserRepository.js';
+import type { UpdateProfileInput, UserRepository } from '../../domain/repositories/UserRepository.js';
 import { dbPool } from '../database/mysql.js';
 
 interface UserRow extends RowDataPacket {
@@ -79,6 +79,24 @@ export class MySqlUserRepository implements UserRepository {
 
     if (!user) {
       throw new Error('Failed to load created user');
+    }
+
+    return user;
+  }
+
+  async updateProfileById(userId: number, input: UpdateProfileInput): Promise<User> {
+    await dbPool.query(
+      `
+      UPDATE users
+      SET firstname = ?, lastname = ?, phone_number = ?
+      WHERE user_id = ? AND deleted_at IS NULL
+      `,
+      [input.firstname, input.lastname, input.phoneNumber, userId],
+    );
+
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new Error('User not found after update');
     }
 
     return user;

@@ -67,6 +67,25 @@ export async function apiPost<T>(path: string, body: unknown, token?: string): P
   return payload as ApiSuccess<T>;
 }
 
+export async function apiPatch<T>(path: string, body: unknown, token?: string): Promise<ApiSuccess<T>> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+
+  const payload = await parseJson(response);
+
+  if (!response.ok || !payload.success) {
+    throw new HttpError(payload.success ? 'Request failed' : payload.error.message, response.status);
+  }
+
+  return payload as ApiSuccess<T>;
+}
+
 export const resolveImageUrl = (imagePath: string): string => {
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
     return imagePath;

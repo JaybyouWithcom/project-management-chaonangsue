@@ -21,5 +21,9 @@ export const buildAuthRoutes = (
     authController.me(req, res).catch(next);
   });
 
+  router.patch('/me', authMiddleware, (req, res, next) => {
+    authController.updateMe(req, res).catch(next);
+  });
+
   return router;
 };

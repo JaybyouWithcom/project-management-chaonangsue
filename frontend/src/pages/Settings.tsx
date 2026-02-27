@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { FormEvent, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleUserRound, Mail, Phone, ShieldCheck, Wallet } from "lucide-react";
 
 import Navbar from "@/components/Navbar";
@@ -7,7 +8,10 @@ import Footer from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { apiGet } from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { apiGet, apiPatch, HttpError } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 
 interface AuthUser {
@@ -34,6 +38,14 @@ const roleLabel: Record<AuthUser["role"], string> = {
 
 const Settings = () => {
   const token = getAuthToken();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    firstname: "",
+    lastname: "",
+    phoneNumber: "",
+  });
+  const [saving, setSaving] = useState(false);
 
   const { data: user, isLoading, isError } = useQuery({
     queryKey: ["settings-me", token],
@@ -44,6 +56,48 @@ const Settings = () => {
       return response.data.user;
     },
   });
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    setForm({
+      firstname: user.firstname,
+      lastname: user.lastname,
+      phoneNumber: user.phoneNumber ?? "",
+    });
+  }, [user]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await apiPatch<{ user: AuthUser }>(
+        "/api/auth/me",
+        {
+          firstname: form.firstname,
+          lastname: form.lastname,
+          phoneNumber: form.phoneNumber.trim() ? form.phoneNumber : undefined,
+        },
+        token,
+      );
+      await queryClient.invalidateQueries({ queryKey: ["settings-me", token] });
+      toast({ title: "บันทึกข้อมูลสำเร็จ" });
+    } catch (error) {
+      toast({
+        title: "บันทึกข้อมูลไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -81,7 +135,42 @@ const Settings = () => {
                     ข้อมูลบัญชี
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <CardContent className="space-y-4">
+                  <form className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm" onSubmit={(event) => { void handleSubmit(event); }}>
+                    <div>
+                      <Label htmlFor="firstname">ชื่อ</Label>
+                      <Input
+                        id="firstname"
+                        value={form.firstname}
+                        onChange={(event) => setForm((prev) => ({ ...prev, firstname: event.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="lastname">นามสกุล</Label>
+                      <Input
+                        id="lastname"
+                        value={form.lastname}
+                        onChange={(event) => setForm((prev) => ({ ...prev, lastname: event.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">เบอร์โทร</Label>
+                      <Input
+                        id="phone"
+                        value={form.phoneNumber}
+                        onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))}
+                        placeholder="ไม่บังคับ"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button type="submit" disabled={saving}>
+                        {saving ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
+                      </Button>
+                    </div>
+                  </form>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">ชื่อ - นามสกุล</p>
                     <p className="font-medium">{user.firstname} {user.lastname}</p>
@@ -104,6 +193,7 @@ const Settings = () => {
                       <p className="font-medium">{user.phoneNumber ?? "-"}</p>
                     </div>
                   </div>
+                </div>
                 </CardContent>
               </Card>
 

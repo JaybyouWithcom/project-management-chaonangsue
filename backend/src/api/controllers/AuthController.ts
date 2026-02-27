@@ -58,4 +58,25 @@ export class AuthController {
     const user = await this.authService.me(req.auth.userId);
     sendSuccess(res, { user });
   };
+
+  updateMe = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const { firstname, lastname, phoneNumber } = req.body as Record<string, unknown>;
+
+    if (!isNonEmptyString(firstname) || !isNonEmptyString(lastname)) {
+      throw new AppError('Missing required fields', 400);
+    }
+
+    const user = await this.authService.updateProfile({
+      userId: req.auth.userId,
+      firstname,
+      lastname,
+      phoneNumber: isNonEmptyString(phoneNumber) ? phoneNumber : undefined,
+    });
+
+    sendSuccess(res, { user });
+  };
 }

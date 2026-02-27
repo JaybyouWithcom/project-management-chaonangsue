@@ -23,6 +23,13 @@ interface LoginInput {
   password: string;
 }
 
+interface UpdateProfileInput {
+  userId: number;
+  firstname: string;
+  lastname: string;
+  phoneNumber?: string;
+}
+
 export interface AuthResponse {
   user: PublicUser;
   token: string;
@@ -90,6 +97,20 @@ export class AuthService {
     }
 
     return toPublicUser(user);
+  }
+
+  async updateProfile(input: UpdateProfileInput): Promise<PublicUser> {
+    if (!input.firstname.trim() || !input.lastname.trim()) {
+      throw new AppError('Missing required fields', 400);
+    }
+
+    const updated = await this.userRepository.updateProfileById(input.userId, {
+      firstname: input.firstname.trim(),
+      lastname: input.lastname.trim(),
+      phoneNumber: input.phoneNumber?.trim() ? input.phoneNumber.trim() : null,
+    });
+
+    return toPublicUser(updated);
   }
 
   verifyToken(token: string): AuthJwtPayload {

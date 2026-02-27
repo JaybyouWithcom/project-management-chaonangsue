@@ -8,39 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import BookCard from "@/components/BookCard";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { conditions, genres, type Book as MockBook } from "@/lib/mockData";
-import { apiGet, resolveImageUrl } from "@/lib/api";
-
-interface ApiBook {
-  bookId: number;
-  title: string;
-  imagePath: string;
-  author: string;
-  isbn: string | null;
-  genre: string | null;
-  bookCondition: string | null;
-  bookPrice: string;
-  status: "Available" | "Rented";
-  ownerName: string;
-  description: string | null;
-}
-
-const toUiBook = (book: ApiBook): MockBook => ({
-  id: String(book.bookId),
-  title: book.title,
-  author: book.author,
-  isbn: book.isbn ?? "-",
-  genre: book.genre ?? "อื่นๆ",
-  cover: resolveImageUrl(book.imagePath),
-  condition: book.bookCondition ?? "3",
-  minRentalPrice: Math.round(Number(book.bookPrice) * 0.3),
-  pricePerDay: Math.round(Number(book.bookPrice) * 0.3),
-  deposit: Math.round(Number(book.bookPrice) * 0.5),
-  description: book.description ?? "",
-  available: book.status === "Available",
-  rating: 4.5,
-  totalRentals: 0,
-});
+import { conditions, genres } from "@/lib/mockData";
+import { apiGet } from "@/lib/api";
+import { type ApiBook, toUiBook } from "@/lib/books";
 
 const BrowseBooks = () => {
   const [search, setSearch] = useState("");

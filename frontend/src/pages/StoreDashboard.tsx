@@ -16,12 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-<<<<<<< HEAD:frontend/src/pages/AdminDashboard.tsx
-import { genres } from "@/lib/mockData";
-=======
 import { mockOrders, genres } from "@/lib/mockData";
 import { conditionOptions, normalizeConditionLabel } from "@/lib/bookCondition";
->>>>>>> a06a4b1040207658978745bc4a645e9fc180b423:frontend/src/pages/StoreDashboard.tsx
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
@@ -57,6 +53,14 @@ interface ApiRental {
   paymentStatus: "รอชำระ" | "ชำระแล้ว" | "ยกเลิก";
 }
 
+// เพิ่ม Interface สำหรับ Shop
+interface ApiShop {
+  shopId: number;
+  shopName: string;
+  description: string | null;
+  imagePath: string;
+}
+
 const paymentStatusColors: Record<string, string> = {
   "รอชำระ": "bg-warning/20 text-warning",
   "ชำระแล้ว": "bg-success/20 text-success",
@@ -80,6 +84,17 @@ const StoreDashboard = () => {
     bookPrice: "",
     bookCondition: "2",
     description: "",
+  });
+
+  // ดึงข้อมูลร้านค้าทั้งหมดของเราเพื่อหาชื่อร้านปัจจุบัน (ดึงจาก Cache ของหน้า StoreMenu ได้เลย)
+  const { data: shops = [] } = useQuery({
+    queryKey: ["my-shops"],
+    queryFn: async () => {
+      if (!token) return [] as ApiShop[];
+      const result = await apiGet<{ shops: ApiShop[] }>("/api/shops", token);
+      return result.data.shops;
+    },
+    enabled: !!token, // ทำงานเมื่อมี token เท่านั้น
   });
 
   const { data: books = [], isError } = useQuery({
@@ -164,6 +179,9 @@ const StoreDashboard = () => {
     }
   };
 
+  // ค้นหาชื่อร้านจากข้อมูลร้านค้าทั้งหมด ถ้าไม่พบให้แสดงคำว่า "แดชบอร์ดร้าน"
+  const shopName = shops.find((s) => s.shopId === shopId)?.shopName || "แดชบอร์ดร้าน";
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -173,7 +191,11 @@ const StoreDashboard = () => {
         )}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="font-display text-3xl md:text-4xl font-bold">แดชบอร์ดร้าน</h1>
+            {/* นำตัวแปร shopName มาแสดงตรงนี้ */}
+            <h1 className="font-display text-3xl md:text-4xl font-bold flex items-center gap-3">
+              <Store className="h-8 w-8 text-primary" />
+              {shopName}
+            </h1>
             <p className="text-muted-foreground mt-1">จัดการคลัง คำสั่งเช่า และรายได้</p>
           </div>
           <Dialog>

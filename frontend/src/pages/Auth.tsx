@@ -72,7 +72,7 @@ const AuthPage = () => {
     if (normalizedPhone && !phoneRegex.test(normalizedPhone)) {
       toast({
         title: 'เบอร์โทรไม่ถูกต้อง',
-        description: 'เบอร์โทรต้องเป็นตัวเลข 9-10 หลักเท่านั้น',
+        description: 'เบอร์โทรศัพท์ต้องเป็นตัวเลข 9-10 หลักเท่านั้น',
         variant: 'destructive',
       });
       return;

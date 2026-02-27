@@ -64,9 +64,11 @@ export class AuthController {
       throw new AppError('Unauthorized', 401);
     }
 
-    const { firstname, lastname, phoneNumber } = req.body as Record<string, unknown>;
+    // 1. เพิ่ม email เข้าไปใน destructuring
+    const { firstname, lastname, phoneNumber, email } = req.body as Record<string, unknown>;
 
-    if (!isNonEmptyString(firstname) || !isNonEmptyString(lastname)) {
+    // 2. เพิ่มการตรวจสอบ email ว่าเป็น String ที่ไม่ว่าง
+    if (!isNonEmptyString(firstname) || !isNonEmptyString(lastname) || !isNonEmptyString(email)) {
       throw new AppError('Missing required fields', 400);
     }
 
@@ -74,6 +76,7 @@ export class AuthController {
       userId: req.auth.userId,
       firstname,
       lastname,
+      email, // 3. ส่ง email ไปยัง service
       phoneNumber: isNonEmptyString(phoneNumber) ? phoneNumber : undefined,
     });
 

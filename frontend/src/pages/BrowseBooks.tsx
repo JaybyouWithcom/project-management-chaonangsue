@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
-import { Search, SlidersHorizontal, Star } from "lucide-react";
+import { useMemo, useState, useRef, useEffect } from "react";
+import { Search, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,6 +19,21 @@ const BrowseBooks = () => {
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedCondition, setSelectedCondition] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("popular");
+  
+  // State สำหรับจัดการการเปิด/ปิด Dropdown หมวดหมู่
+  const [isGenreDropdownOpen, setIsGenreDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // ตรวจจับการคลิกนอก Dropdown เพื่อปิด
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsGenreDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["books", search],
@@ -41,11 +57,6 @@ const BrowseBooks = () => {
     return books;
   }, [data, selectedCondition, selectedGenres, sortBy]);
 
-  const recommendedBooks = useMemo(
-    () => filtered.filter((book) => book.rating >= 4.5).slice(0, 4),
-    [filtered],
-  );
-
   const toggleGenre = (genre: string) => {
     setSelectedGenres((previous) =>
       previous.includes(genre) ? previous.filter((item) => item !== genre) : [...previous, genre],
@@ -68,8 +79,39 @@ const BrowseBooks = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          
           <div className="flex flex-wrap gap-3 items-center">
             <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+            
+            {/* Dropdown เลือกหมวดหมู่แบบหลายตัวเลือก */}
+            <div className="relative" ref={dropdownRef}>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-40 justify-between font-normal bg-background"
+                onClick={() => setIsGenreDropdownOpen(!isGenreDropdownOpen)}
+              >
+                {selectedGenres.length > 0 ? `หมวดหมู่ (${selectedGenres.length})` : "ทุกหมวดหมู่"}
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+              
+              {isGenreDropdownOpen && (
+                <div className="absolute top-full left-0 mt-2 w-48 p-3 bg-popover border rounded-md shadow-lg z-50">
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {genres.map((genre) => (
+                      <label key={genre} className="flex items-center gap-3 text-sm cursor-pointer hover:bg-muted/50 p-1.5 rounded-md transition-colors">
+                        <Checkbox 
+                          checked={selectedGenres.includes(genre)} 
+                          onCheckedChange={() => toggleGenre(genre)} 
+                        />
+                        <span>{genre}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <Select value={selectedCondition} onValueChange={setSelectedCondition}>
               <SelectTrigger className="w-36"><SelectValue placeholder="สภาพ" /></SelectTrigger>
               <SelectContent>
@@ -88,26 +130,21 @@ const BrowseBooks = () => {
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">เลือกได้หลายหมวดหมู่</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {genres.map((genre) => (
-                <label key={genre} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <Checkbox checked={selectedGenres.includes(genre)} onCheckedChange={() => toggleGenre(genre)} />
-                  <span>{genre}</span>
-                </label>
+          {/* แสดง Badge ของหมวดหมู่ที่ถูกเลือก เพื่อให้กดยกเลิกง่ายๆ */}
+          {(selectedGenres.length > 0 || selectedCondition !== "all") && (
+            <div className="flex flex-wrap gap-2 pt-2 border-t mt-4">
+              {selectedGenres.map((genre) => (
+                <Badge key={genre} variant="secondary" className="cursor-pointer hover:bg-destructive/10 hover:text-destructive" onClick={() => toggleGenre(genre)}>
+                  {genre} ✕
+                </Badge>
               ))}
+              {selectedCondition !== "all" && (
+                <Badge variant="secondary" className="cursor-pointer hover:bg-destructive/10 hover:text-destructive" onClick={() => setSelectedCondition("all")}>
+                  {selectedCondition} ✕
+                </Badge>
+              )}
             </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {selectedGenres.map((genre) => (
-              <Badge key={genre} variant="secondary" className="cursor-pointer" onClick={() => toggleGenre(genre)}>{genre} ✕</Badge>
-            ))}
-            {selectedCondition !== "all" && (
-              <Badge variant="secondary" className="cursor-pointer" onClick={() => setSelectedCondition("all")}>{selectedCondition} ✕</Badge>
-            )}
-          </div>
+          )}
         </div>
 
         {isLoading ? (
@@ -116,17 +153,6 @@ const BrowseBooks = () => {
           <p className="text-destructive">โหลดข้อมูลไม่สำเร็จ กรุณาตรวจสอบ backend API</p>
         ) : (
           <>
-            {recommendedBooks.length > 0 && (
-              <section className="mb-8">
-                <h2 className="font-display text-2xl font-bold mb-3 flex items-center gap-2"><Star className="h-5 w-5 text-accent fill-current" /> หนังสือแนะนำจากคะแนนรีวิว</h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-                  {recommendedBooks.map((book) => (
-                    <BookCard key={`recommended-${book.id}`} book={book} />
-                  ))}
-                </div>
-              </section>
-            )}
-
             <p className="text-sm text-muted-foreground mb-4">พบ {filtered.length} เล่ม</p>
             {filtered.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
@@ -137,7 +163,7 @@ const BrowseBooks = () => {
             ) : (
               <div className="text-center py-20 text-muted-foreground">
                 <Search className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                <p>ไม่พบหนังสือที่ค้นหา ลองเปลี่ยนคำค้นหาดู</p>
+                <p>ไม่พบหนังสือที่ค้นหา ลองเปลี่ยนคำค้นหาหรือตัวกรองดู</p>
               </div>
             )}
           </>

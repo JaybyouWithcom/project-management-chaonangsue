@@ -1,5 +1,6 @@
 import type { Book as UiBook } from "@/lib/mockData";
 import { resolveImageUrl } from "@/lib/api";
+import { normalizeConditionLabel } from "@/lib/bookCondition";
 
 export interface ApiBook {
   bookId: number;
@@ -22,9 +23,8 @@ export const toUiBook = (book: ApiBook): UiBook => ({
   isbn: book.isbn ?? "-",
   genre: book.genre ?? "อื่นๆ",
   cover: resolveImageUrl(book.imagePath),
-  condition: book.bookCondition ?? "3",
+  condition: normalizeConditionLabel(book.bookCondition),
   minRentalPrice: Math.round(Number(book.bookPrice) * 0.3),
-  pricePerDay: Math.round(Number(book.bookPrice) * 0.3),
   deposit: Math.round(Number(book.bookPrice) * 0.5),
   description: book.description ?? "",
   available: book.status === "Available",

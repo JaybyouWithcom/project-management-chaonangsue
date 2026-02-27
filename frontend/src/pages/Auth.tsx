@@ -19,6 +19,9 @@ interface AuthResponse {
   token: string;
 }
 
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const phoneRegex = /^\d{9,10}$/;
+
 const AuthPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -54,9 +57,34 @@ const AuthPage = () => {
   };
 
   const handleRegister = async () => {
+    const normalizedEmail = registerForm.email.trim();
+    const normalizedPhone = registerForm.phoneNumber.trim();
+
+    if (!emailRegex.test(normalizedEmail)) {
+      toast({
+        title: 'อีเมลไม่ถูกต้อง',
+        description: 'กรุณากรอกอีเมลในรูปแบบที่ถูกต้อง เช่น user@example.com',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (normalizedPhone && !phoneRegex.test(normalizedPhone)) {
+      toast({
+        title: 'เบอร์โทรไม่ถูกต้อง',
+        description: 'เบอร์โทรต้องเป็นตัวเลข 9-10 หลักเท่านั้น',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const result = await apiPost<AuthResponse>('/api/auth/register', registerForm);
+      const result = await apiPost<AuthResponse>('/api/auth/register', {
+        ...registerForm,
+        email: normalizedEmail,
+        phoneNumber: normalizedPhone,
+      });
       setAuthToken(result.data.token);
       toast({ title: `สมัครสมาชิกสำเร็จ (${result.data.user.username})` });
       navigate('/browse');
@@ -93,7 +121,7 @@ const AuthPage = () => {
             <Input placeholder="นามสกุล" value={registerForm.lastname} onChange={(e) => setRegisterForm((p) => ({ ...p, lastname: e.target.value }))} />
             <Input placeholder="Username" value={registerForm.username} onChange={(e) => setRegisterForm((p) => ({ ...p, username: e.target.value }))} />
             <Input placeholder="Email" value={registerForm.email} onChange={(e) => setRegisterForm((p) => ({ ...p, email: e.target.value }))} />
-            <Input placeholder="เบอร์โทร" value={registerForm.phoneNumber} onChange={(e) => setRegisterForm((p) => ({ ...p, phoneNumber: e.target.value }))} />
+            <Input placeholder="เบอร์โทร" value={registerForm.phoneNumber} onChange={(e) => setRegisterForm((p) => ({ ...p, phoneNumber: e.target.value.replace(/\D/g, '') }))} maxLength={10} />
             <Input type="password" placeholder="Password" value={registerForm.password} onChange={(e) => setRegisterForm((p) => ({ ...p, password: e.target.value }))} />
             <Button onClick={handleRegister} disabled={submitting} className="w-full">สมัครสมาชิก</Button>
           </TabsContent>

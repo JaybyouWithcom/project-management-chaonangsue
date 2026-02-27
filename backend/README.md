@@ -51,6 +51,44 @@ JWT_EXPIRES_IN=7d
 BCRYPT_SALT_ROUNDS=12
 ```
 
+
+## API v1 (MVP สำหรับ Frontend)
+
+Response มาตรฐาน:
+
+```json
+{
+  "success": true,
+  "data": {},
+  "meta": { "page": 1, "limit": 10, "total": 100 }
+}
+```
+
+Error มาตรฐาน:
+
+```json
+{
+  "success": false,
+  "error": { "message": "..." }
+}
+```
+
+### Auth
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me` (ต้องส่ง Bearer token)
+
+### Books
+
+- `GET /api/books` (ค้นหา + filter + pagination)
+  - query: `q`, `genre`, `minPrice`, `maxPrice`, `page`, `limit`
+- `GET /api/books/:bookId` (รายละเอียดหนังสือที่พร้อมให้เช่า)
+- `GET /api/books/:bookId/quote?plan=7days|14days|30days`
+  - คำนวณ `dueDate` โดยอิง Asia/Bangkok
+  - คำนวณยอดจ่ายเริ่มต้นแบบ mock: `rental_price + deposit_price`
+- `POST /api/books` (ลงหนังสือในร้าน, ต้อง login)
+
 ## Database Scripts
 
 - สร้างตารางผู้ใช้: `scripts/create-users-table.sql`

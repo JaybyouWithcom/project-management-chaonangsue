@@ -9,6 +9,7 @@ import BookDetail from "./pages/BookDetail";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
+import AuthPage from "./pages/Auth";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/book/:id" element={<BookDetail />} />
           <Route path="/dashboard" element={<CustomerDashboard />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/auth" element={<AuthPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

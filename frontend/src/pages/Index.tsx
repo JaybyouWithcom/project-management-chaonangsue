@@ -1,11 +1,14 @@
 import { Link } from "react-router-dom";
 import { Search, BookOpen, CreditCard, Truck, ArrowRight, Star, Shield, Leaf } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+
 import { Button } from "@/components/ui/button";
-import { mockBooks } from "@/lib/mockData";
 import BookCard from "@/components/BookCard";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import heroImage from "@/assets/hero-books.jpg";
+import { apiGet } from "@/lib/api";
+import { type ApiBook, toUiBook } from "@/lib/books";
 
 const steps = [
   { icon: Search, title: "ค้นหาหนังสือ", desc: "เลือกหนังสือที่ชอบจากคลังกว่า 1,000 เล่ม" },
@@ -22,7 +25,13 @@ const stats = [
 ];
 
 const Index = () => {
-  const featuredBooks = mockBooks.filter((b) => b.available).slice(0, 4);
+  const { data: featuredBooks = [], isLoading, isError } = useQuery({
+    queryKey: ["featured-books"],
+    queryFn: async () => {
+      const response = await apiGet<{ books: ApiBook[] }>("/api/books?limit=4");
+      return response.data.books.map(toUiBook);
+    },
+  });
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -91,11 +100,17 @@ const Index = () => {
               <Link to="/browse">ดูทั้งหมด <ArrowRight className="ml-1 h-4 w-4" /></Link>
             </Button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {featuredBooks.map((book) => (
-              <BookCard key={book.id} book={book} />
-            ))}
-          </div>
+          {isLoading ? (
+            <p className="text-muted-foreground">กำลังโหลดหนังสือแนะนำ...</p>
+          ) : isError ? (
+            <p className="text-destructive">โหลดข้อมูลหนังสือแนะนำไม่สำเร็จ</p>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+              {featuredBooks.map((book) => (
+                <BookCard key={book.id} book={book} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { SignOptions } from 'jsonwebtoken';
 
-import type { PublicUser, UserRole } from '../../domain/entities/User.js';
+import type { PublicUser, User, UserRole } from '../../domain/entities/User.js';
 import { toPublicUser } from '../../domain/entities/User.js';
 import type { UserRepository } from '../../domain/repositories/UserRepository.js';
 import { env } from '../../infrastructure/config/env.js';
@@ -14,7 +14,7 @@ interface RegisterInput {
   lastname: string;
   username: string;
   email: string;
-  phoneNumber: string;
+  phoneNumber?: string;
   password: string;
 }
 
@@ -35,14 +35,22 @@ export class AuthService {
     await this.assertUniqueness(input);
 
     const passwordHash = await bcrypt.hash(input.password, env.auth.bcryptSaltRounds);
-    const user = await this.userRepository.create({
-      firstname: input.firstname,
-      lastname: input.lastname,
-      username: input.username,
-      email: input.email,
-      phoneNumber: input.phoneNumber,
-      passwordHash,
-    });
+    let user: User;
+    try {
+      user = await this.userRepository.create({
+        firstname: input.firstname,
+        lastname: input.lastname,
+        username: input.username,
+        email: input.email,
+        phoneNumber: input.phoneNumber?.trim() ? input.phoneNumber.trim() : null,
+        passwordHash,
+      });
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ER_DUP_ENTRY') {
+        throw new AppError('Email or username is already in use', 409);
+      }
+      throw error;
+    }
 
     return {
       user: toPublicUser(user),
@@ -113,9 +121,5 @@ export class AuthService {
       throw new AppError('Username is already in use', 409);
     }
 
-    const existingByPhone = await this.userRepository.findByPhoneNumber(input.phoneNumber);
-    if (existingByPhone) {
-      throw new AppError('Phone number is already in use', 409);
-    }
   }
 }

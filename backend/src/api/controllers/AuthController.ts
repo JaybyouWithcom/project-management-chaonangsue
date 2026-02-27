@@ -18,7 +18,6 @@ export class AuthController {
       !isNonEmptyString(lastname) ||
       !isNonEmptyString(username) ||
       !isNonEmptyString(email) ||
-      !isNonEmptyString(phoneNumber) ||
       !isNonEmptyString(password)
     ) {
       throw new AppError('Missing required fields', 400);
@@ -33,7 +32,7 @@ export class AuthController {
       lastname,
       username,
       email,
-      phoneNumber,
+      phoneNumber: isNonEmptyString(phoneNumber) ? phoneNumber : undefined,
       password,
     });
 

@@ -16,7 +16,7 @@ interface AuthUser {
   lastname: string;
   username: string;
   email: string;
-  phoneNumber: string;
+  phoneNumber: string | null;
   role: "Customer" | "Admin" | "Banned";
   balance: string;
 }
@@ -101,7 +101,7 @@ const Settings = () => {
                     <Phone className="h-4 w-4 mt-0.5 text-muted-foreground" />
                     <div>
                       <p className="text-muted-foreground">เบอร์โทร</p>
-                      <p className="font-medium">{user.phoneNumber}</p>
+                      <p className="font-medium">{user.phoneNumber ?? "-"}</p>
                     </div>
                   </div>
                 </CardContent>

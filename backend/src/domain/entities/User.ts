@@ -6,7 +6,7 @@ export interface User {
   lastname: string;
   username: string;
   email: string;
-  phoneNumber: string;
+  phoneNumber: string | null;
   password: string;
   role: UserRole;
   balance: string;
@@ -19,7 +19,7 @@ export interface PublicUser {
   lastname: string;
   username: string;
   email: string;
-  phoneNumber: string;
+  phoneNumber: string | null;
   role: UserRole;
   balance: string;
   deletedAt: Date | null;
@@ -30,7 +30,7 @@ export interface CreateUserInput {
   lastname: string;
   username: string;
   email: string;
-  phoneNumber: string;
+  phoneNumber?: string | null;
   passwordHash: string;
   role?: UserRole;
 }

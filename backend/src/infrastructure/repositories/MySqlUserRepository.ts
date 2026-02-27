@@ -10,7 +10,7 @@ interface UserRow extends RowDataPacket {
   lastname: string;
   username: string;
   email: string;
-  phone_number: string;
+  phone_number: string | null;
   password: string;
   role: User['role'];
   balance: string;
@@ -47,14 +47,6 @@ export class MySqlUserRepository implements UserRepository {
     return rows.length > 0 ? mapUser(rows[0]) : null;
   }
 
-  async findByPhoneNumber(phoneNumber: string): Promise<User | null> {
-    const [rows] = await dbPool.query<UserRow[]>(
-      'SELECT * FROM users WHERE phone_number = ? AND deleted_at IS NULL LIMIT 1',
-      [phoneNumber],
-    );
-    return rows.length > 0 ? mapUser(rows[0]) : null;
-  }
-
   async findById(userId: number): Promise<User | null> {
     const [rows] = await dbPool.query<UserRow[]>(
       'SELECT * FROM users WHERE user_id = ? AND deleted_at IS NULL LIMIT 1',
@@ -76,7 +68,7 @@ export class MySqlUserRepository implements UserRepository {
         input.lastname,
         input.username,
         input.email,
-        input.phoneNumber,
+        input.phoneNumber ?? null,
         input.passwordHash,
         role,
       ],

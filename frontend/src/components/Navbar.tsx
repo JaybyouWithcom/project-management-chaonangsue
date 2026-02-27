@@ -1,8 +1,21 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, Search, User, Menu, X, Settings, Wallet, Store, LogIn, LogOut } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+
 import { Button } from "@/components/ui/button";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
+import { apiGet } from "@/lib/api";
+
+interface AuthUser {
+  userId: number;
+  balance: string;
+}
+
+const currencyFormatter = new Intl.NumberFormat("th-TH", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
 
 const Navbar = () => {
   const location = useLocation();
@@ -14,6 +27,24 @@ const Navbar = () => {
     setLoggedIn(Boolean(getAuthToken()));
   }, [location.pathname]);
 
+  const { data: me } = useQuery({
+    queryKey: ["auth-me", loggedIn],
+    enabled: loggedIn,
+    retry: false,
+    queryFn: async () => {
+      const token = getAuthToken();
+      const response = await apiGet<{ user: AuthUser }>("/api/auth/me", token ?? undefined);
+      return response.data.user;
+    },
+  });
+
+  const balanceLabel = useMemo(() => {
+    if (!me) return "฿-";
+    const balance = Number(me.balance);
+    if (!Number.isFinite(balance)) return "฿-";
+    return `฿${currencyFormatter.format(balance)}`;
+  }, [me]);
+
   const isActive = (path: string) => location.pathname === path;
 
   const navLinks = [
@@ -23,8 +54,6 @@ const Navbar = () => {
     { to: "/admin", label: "ร้านของฉัน", icon: Store },
     { to: "/settings", label: "การตั้งค่า", icon: Settings },
   ];
-
-  const balance = 500;
 
   return (
     <nav className="sticky top-0 z-50 glass-card border-b">
@@ -58,7 +87,7 @@ const Navbar = () => {
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-secondary/50 border rounded-full text-sm">
             <Wallet className="h-4 w-4 text-primary" />
             <span className="font-medium text-muted-foreground">ยอดเงินคงเหลือ:</span>
-            <span className="font-bold text-primary">฿{balance}</span>
+            <span className="font-bold text-primary">{balanceLabel}</span>
           </div>
 
           {loggedIn ? (
@@ -97,7 +126,7 @@ const Navbar = () => {
               <Wallet className="h-4 w-4 text-primary" />
               <span className="font-medium">ยอดเงินคงเหลือ</span>
             </div>
-            <span className="font-bold text-primary">฿{balance}</span>
+            <span className="font-bold text-primary">{balanceLabel}</span>
           </div>
 
           <div className="space-y-1">

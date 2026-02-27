@@ -1,10 +1,14 @@
 import express from 'express';
 
 import { AuthService } from './application/services/AuthService.js';
+import { BookService } from './application/services/BookService.js';
 import { AuthController } from './api/controllers/AuthController.js';
+import { BookController } from './api/controllers/BookController.js';
 import { buildAuthMiddleware } from './api/middlewares/authMiddleware.js';
 import { errorHandler } from './api/middlewares/errorHandler.js';
 import { buildAuthRoutes } from './api/routes/authRoutes.js';
+import { buildBookRoutes } from './api/routes/bookRoutes.js';
+import { MySqlBookRepository } from './infrastructure/repositories/MySqlBookRepository.js';
 import { MySqlUserRepository } from './infrastructure/repositories/MySqlUserRepository.js';
 
 export const buildApp = () => {
@@ -17,11 +21,16 @@ export const buildApp = () => {
   const authController = new AuthController(authService);
   const authMiddleware = buildAuthMiddleware(authService);
 
+  const bookRepository = new MySqlBookRepository();
+  const bookService = new BookService(bookRepository);
+  const bookController = new BookController(bookService);
+
   app.get('/health', (_req, res) => {
     res.status(200).json({ service: 'chaonangsue-backend', status: 'ok' });
   });
 
   app.use('/api/auth', buildAuthRoutes(authController, authMiddleware));
+  app.use('/api/books', buildBookRoutes(bookController, authMiddleware));
 
   app.use(errorHandler);
 

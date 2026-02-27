@@ -9,6 +9,7 @@ interface ShopRow extends RowDataPacket {
   user_id: number;
   shop_name: string;
   description: string | null;
+  image_path: string;
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;
@@ -19,6 +20,7 @@ const mapShop = (row: ShopRow): Shop => ({
   userId: row.user_id,
   shopName: row.shop_name,
   description: row.description,
+  imagePath: row.image_path,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   deletedAt: row.deleted_at,
@@ -28,10 +30,10 @@ export class MySqlShopRepository implements ShopRepository {
   async create(input: CreateShopInput): Promise<Shop> {
     const [result] = await dbPool.query<ResultSetHeader>(
       `
-      INSERT INTO shops (user_id, shop_name, description)
-      VALUES (?, ?, ?)
+      INSERT INTO shops (user_id, shop_name, description, image_path)
+      VALUES (?, ?, ?, ?)
       `,
-      [input.userId, input.shopName, input.description ?? null],
+      [input.userId, input.shopName, input.description ?? null, input.imagePath],
     );
 
     const shop = await this.findById(result.insertId);

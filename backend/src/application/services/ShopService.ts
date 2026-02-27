@@ -6,6 +6,7 @@ interface CreateShopInput {
   userId: number;
   shopName: string;
   description?: string;
+  imagePath: string;
 }
 
 export class ShopService {
@@ -15,11 +16,15 @@ export class ShopService {
     if (!input.shopName.trim()) {
       throw new AppError('กรุณาระบุชื่อร้าน', 400);
     }
+    if (!input.imagePath.trim()) {
+      throw new AppError('กรุณาอัปโหลดรูปร้าน', 400);
+    }
 
     return this.shopRepository.create({
       userId: input.userId,
       shopName: input.shopName.trim(),
       description: input.description?.trim() || undefined,
+      imagePath: input.imagePath.trim(),
     });
   }
 

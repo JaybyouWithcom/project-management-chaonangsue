@@ -98,6 +98,10 @@ Error มาตรฐาน:
 - `POST /api/books` (ลงหนังสือในร้าน, ต้อง login)
   - body ต้องส่ง `bookPrice` และ `imageBase64` (data URL) เพื่อให้ server บันทึกรูปและเก็บ path ให้อัตโนมัติ
   - แนะนำให้ frontend รับไฟล์จาก `<input type="file">` แล้วแปลงเป็น base64 ก่อนส่ง API
+- `GET /api/shops` (ดึงร้านของผู้ใช้ที่ login)
+- `POST /api/shops` (สร้างร้าน, ต้อง login)
+  - body ต้องส่ง `shopName` และ `imageBase64` (data URL)
+  - `description` เป็น optional
 
 ## Database Scripts
 
@@ -106,6 +110,7 @@ Error มาตรฐาน:
 - migrate บทบาทเก่า `Lender` -> `Customer`: `scripts/migrate-merge-lender-role.sql`
 - เพิ่ม soft delete ให้ users: `scripts/migrate-add-user-soft-delete.sql`
 - เพิ่ม soft delete ให้ shops: `scripts/migrate-add-shop-soft-delete.sql`
+- เพิ่มคอลัมน์รูปร้านให้ shops: `scripts/migrate-add-shop-image-path.sql`
 - เปลี่ยน FK shops.user_id ให้ไม่ cascade delete: `scripts/migrate-shops-fk-restrict.sql`
 - ตัวอย่าง soft delete user: `scripts/soft-delete-user.sql`
 - ตัวอย่าง hard delete user (ใช้เฉพาะ admin flow): `scripts/hard-delete-user.sql`

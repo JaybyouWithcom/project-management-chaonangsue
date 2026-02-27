@@ -34,3 +34,21 @@ export const buildAuthMiddleware = (authService: AuthService) => {
     next();
   };
 };
+
+export const buildOptionalAuthMiddleware = (authService: AuthService) => {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    const token = getBearerToken(req.header('authorization'));
+    if (!token) {
+      next();
+      return;
+    }
+
+    const payload = authService.verifyToken(token);
+    req.auth = {
+      userId: Number(payload.sub),
+      role: payload.role,
+    };
+
+    next();
+  };
+};

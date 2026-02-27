@@ -16,7 +16,37 @@ import { MySqlUserRepository } from './infrastructure/repositories/MySqlUserRepo
 export const buildApp = () => {
   const app = express();
 
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
+
+  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
+
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(204);
+      return;
+    }
+
+    next();
+  });
+
+  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
+
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(204);
+      return;
+    }
+
+    next();
+  });
 
   app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
@@ -37,6 +67,19 @@ export const buildApp = () => {
   const authService = new AuthService(userRepository);
   const authController = new AuthController(authService);
   const authMiddleware = buildAuthMiddleware(authService);
+  const optionalAuthMiddleware = buildOptionalAuthMiddleware(authService);
+
+  const bookRepository = new MySqlBookRepository();
+  const bookService = new BookService(bookRepository);
+  const bookController = new BookController(bookService);
+
+  const shopRepository = new MySqlShopRepository();
+  const shopService = new ShopService(shopRepository);
+  const shopController = new ShopController(shopService);
+
+  const bookRepository = new MySqlBookRepository();
+  const bookService = new BookService(bookRepository);
+  const bookController = new BookController(bookService);
 
   const bookRepository = new MySqlBookRepository();
   const bookService = new BookService(bookRepository);

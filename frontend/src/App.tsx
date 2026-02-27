@@ -8,6 +8,7 @@ import BrowseBooks from "./pages/BrowseBooks";
 import BookDetail from "./pages/BookDetail";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import StoreMenu from "./pages/StoreMenu";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/Auth";
 

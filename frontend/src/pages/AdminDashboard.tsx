@@ -17,7 +17,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { mockOrders, genres } from "@/lib/mockData";
 import { useToast } from "@/hooks/use-toast";
-import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
+import { apiGet, apiPost, HttpError } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 
 interface ApiBook {
@@ -43,12 +43,12 @@ const AdminDashboard = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [bookSearch, setBookSearch] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     title: "",
     author: "",
     isbn: "",
     genre: "",
+    imagePath: "",
     rentalPrice: "",
     depositPrice: "",
     bookCondition: "3",
@@ -81,34 +81,17 @@ const AdminDashboard = () => {
     }
 
     try {
-      if (!imageFile) {
-        toast({ title: "กรุณาเลือกรูปปกหนังสือ", variant: "destructive" });
-        return;
-      }
-
-      const imageBase64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (typeof reader.result === 'string') {
-            resolve(reader.result);
-            return;
-          }
-
-          reject(new Error('อ่านไฟล์รูปไม่สำเร็จ'));
-        };
-        reader.onerror = () => reject(new Error('อ่านไฟล์รูปไม่สำเร็จ'));
-        reader.readAsDataURL(imageFile);
-      });
-
-      await apiPost("/api/books", {
-        ...form,
-        rentalPrice: Number(form.rentalPrice),
-        depositPrice: Number(form.depositPrice),
-        imageBase64,
-      }, token);
+      await apiPost(
+        "/api/books",
+        {
+          ...form,
+          rentalPrice: Number(form.rentalPrice),
+          depositPrice: Number(form.depositPrice),
+        },
+        token,
+      );
       toast({ title: "เพิ่มหนังสือสำเร็จ! 📚" });
-      setForm({ title: "", author: "", isbn: "", genre: "", rentalPrice: "", depositPrice: "", bookCondition: "3", description: "" });
-      setImageFile(null);
+      setForm({ title: "", author: "", isbn: "", genre: "", imagePath: "", rentalPrice: "", depositPrice: "", bookCondition: "3", description: "" });
       await queryClient.invalidateQueries({ queryKey: ["admin-books"] });
     } catch (error) {
       toast({
@@ -142,7 +125,7 @@ const AdminDashboard = () => {
                 <div><Label>ชื่อหนังสือ</Label><Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} /></div>
                 <div><Label>ผู้เขียน</Label><Input value={form.author} onChange={(e) => setForm((p) => ({ ...p, author: e.target.value }))} /></div>
                 <div><Label>ISBN</Label><Input value={form.isbn} onChange={(e) => setForm((p) => ({ ...p, isbn: e.target.value }))} /></div>
-                <div><Label>รูปปกหนังสือ</Label><Input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} /></div>
+                <div><Label>รูปปก (local path หรือ URL)</Label><Input value={form.imagePath} onChange={(e) => setForm((p) => ({ ...p, imagePath: e.target.value }))} /></div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>หมวดหมู่</Label>
@@ -195,7 +178,7 @@ const AdminDashboard = () => {
               <div className="space-y-3">
                 {filteredBooks.map((book) => (
                   <div key={book.bookId} className="flex items-center gap-4 rounded-lg border p-3">
-                    <img src={resolveImageUrl(book.imagePath)} alt={book.title} className="w-14 h-20 rounded object-cover bg-muted" />
+                    <img src={book.imagePath} alt={book.title} className="w-14 h-20 rounded object-cover bg-muted" />
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{book.title}</p>
                       <p className="text-sm text-muted-foreground truncate">{book.author}</p>

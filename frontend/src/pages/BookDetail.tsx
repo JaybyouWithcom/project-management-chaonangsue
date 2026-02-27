@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
-import { apiGet, HttpError, resolveImageUrl } from "@/lib/api";
+import { apiGet, HttpError } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 
 type Plan = "7days" | "14days" | "30days";
@@ -118,7 +118,7 @@ const BookDetail = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
           <div className="rounded-xl overflow-hidden border bg-muted aspect-[3/4] max-h-[600px]">
-            <img src={resolveImageUrl(book.imagePath)} alt={book.title} className="w-full h-full object-cover" />
+            <img src={book.imagePath} alt={book.title} className="w-full h-full object-cover" />
           </div>
 
           <div className="space-y-6">

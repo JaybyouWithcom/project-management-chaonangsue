@@ -18,7 +18,6 @@ export const buildApp = () => {
 
   app.use(express.json());
 
-  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');

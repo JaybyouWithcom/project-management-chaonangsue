@@ -88,7 +88,6 @@ Error มาตรฐาน:
   - คำนวณ `dueDate` โดยอิง Asia/Bangkok
   - คำนวณยอดจ่ายเริ่มต้นแบบ mock: `rental_price + deposit_price`
 - `POST /api/books` (ลงหนังสือในร้าน, ต้อง login)
-  - body ต้องส่ง `imageBase64` (data URL) เพื่อให้ server บันทึกรูปและเก็บ path ให้อัตโนมัติ
 
 ## Database Scripts
 

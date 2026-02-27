@@ -31,6 +31,16 @@ const saveImageFromDataUrl = async (imageBase64: string): Promise<string> => {
 export class ShopController {
   constructor(private readonly shopService: ShopService) {}
 
+  detail = async (req: Request, res: Response): Promise<void> => {
+    const shopId = Number(req.params.shopId);
+    if (!Number.isInteger(shopId) || shopId <= 0) {
+      throw new AppError('shopId must be an integer', 400);
+    }
+
+    const shop = await this.shopService.getById(shopId);
+    sendSuccess(res, { shop });
+  };
+
   create = async (req: Request, res: Response): Promise<void> => {
     if (!req.auth?.userId) {
       throw new AppError('Unauthorized', 401);

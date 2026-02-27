@@ -17,6 +17,8 @@ type Plan = "15days" | "30days";
 interface BookDetailData {
   bookId: number;
   ownerId: number;
+  shopId: number | null;
+  shopName: string | null;
   imagePath: string;
   title: string;
   genre: string | null;
@@ -192,7 +194,16 @@ const BookDetail = () => {
                 <Badge className="bg-accent text-accent-foreground border-0">{normalizeConditionLabel(book.bookCondition)}</Badge>
               </div>
               <h1 className="font-display text-3xl md:text-4xl font-bold">{book.title}</h1>
-              <p className="text-muted-foreground mt-1">ผู้เขียน {book.author} • เจ้าของร้าน {book.ownerName}</p>
+              <p className="text-muted-foreground mt-1">
+                ผู้เขียน {book.author} • ร้าน{" "}
+                {book.shopId && book.shopName ? (
+                  <Link to={`/shop/${book.shopId}`} className="underline underline-offset-2 hover:text-primary">
+                    {book.shopName}
+                  </Link>
+                ) : (
+                  book.ownerName
+                )}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">ISBN: {book.isbn ?? '-'}</p>
             </div>
 

@@ -5,6 +5,7 @@ export interface Book {
   bookId: number;
   ownerId: number;
   shopId: number | null;
+  shopName: string | null;
   title: string;
   imagePath: string;
   author: string;

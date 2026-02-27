@@ -31,4 +31,17 @@ export class ShopService {
   async listByUserId(userId: number): Promise<Shop[]> {
     return this.shopRepository.findByUserId(userId);
   }
+
+  async getById(shopId: number): Promise<Shop> {
+    if (!Number.isInteger(shopId) || shopId <= 0) {
+      throw new AppError('shopId must be an integer', 400);
+    }
+
+    const shop = await this.shopRepository.findById(shopId);
+    if (!shop) {
+      throw new AppError('ไม่พบร้านที่ต้องการ', 404);
+    }
+
+    return shop;
+  }
 }

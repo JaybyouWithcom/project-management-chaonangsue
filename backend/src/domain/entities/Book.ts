@@ -4,6 +4,7 @@ export type RentalPlan = '15days' | '30days';
 export interface Book {
   bookId: number;
   ownerId: number;
+  shopId: number | null;
   title: string;
   imagePath: string;
   author: string;
@@ -19,6 +20,7 @@ export interface Book {
 
 export interface CreateBookInput {
   ownerId: number;
+  shopId: number;
   title: string;
   imagePath: string;
   author: string;
@@ -30,6 +32,7 @@ export interface CreateBookInput {
 }
 
 export interface BookQuery {
+  shopId?: number;
   q?: string;
   genre?: string;
   minPrice?: number;

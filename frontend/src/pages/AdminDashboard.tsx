@@ -4,6 +4,7 @@ import {
   TrendingUp, BarChart3, Users, Search, Store,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,9 @@ const paymentStatusColors: Record<string, string> = {
 };
 
 const AdminDashboard = () => {
+  const [searchParams] = useSearchParams();
+  const shopId = Number(searchParams.get("shopId"));
+  const hasValidShopId = Number.isInteger(shopId) && shopId > 0;
   const token = getAuthToken();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -55,9 +59,12 @@ const AdminDashboard = () => {
   });
 
   const { data: books = [], isError } = useQuery({
-    queryKey: ["admin-books"],
+    queryKey: ["admin-books", shopId],
     queryFn: async () => {
-      const result = await apiGet<{ books: ApiBook[] }>("/api/books?limit=100");
+      if (!hasValidShopId) {
+        return [] as ApiBook[];
+      }
+      const result = await apiGet<{ books: ApiBook[] }>(`/api/books?limit=100&shopId=${shopId}`);
       return result.data.books;
     },
   });
@@ -76,6 +83,10 @@ const AdminDashboard = () => {
     const token = getAuthToken();
     if (!token) {
       toast({ title: "กรุณา login ก่อนลงหนังสือ", variant: "destructive" });
+      return;
+    }
+    if (!hasValidShopId) {
+      toast({ title: "ไม่พบร้านที่เลือก", description: "กรุณากลับไปเลือกจากเมนูร้านของฉัน", variant: "destructive" });
       return;
     }
 
@@ -101,6 +112,7 @@ const AdminDashboard = () => {
 
       await apiPost("/api/books", {
         ...form,
+        shopId,
         bookPrice: Number(form.bookPrice),
         imageBase64,
       }, token);
@@ -121,6 +133,9 @@ const AdminDashboard = () => {
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <div className="container mx-auto px-4 py-8 flex-1">
+        {!hasValidShopId && (
+          <p className="text-destructive mb-4">ไม่พบ shopId กรุณาเลือกเข้าร้านจากหน้าเมนูร้านของฉัน</p>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="font-display text-3xl md:text-4xl font-bold">แดชบอร์ดร้าน</h1>
@@ -128,7 +143,7 @@ const AdminDashboard = () => {
           </div>
           <Dialog>
             <DialogTrigger asChild>
-              <Button className="bg-primary text-primary-foreground">
+              <Button className="bg-primary text-primary-foreground" disabled={!hasValidShopId}>
                 <Plus className="mr-2 h-4 w-4" /> เพิ่มหนังสือ
               </Button>
             </DialogTrigger>

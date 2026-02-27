@@ -42,13 +42,13 @@ export const buildApp = () => {
   const authController = new AuthController(authService);
   const authMiddleware = buildAuthMiddleware(authService);
 
-  const bookRepository = new MySqlBookRepository();
-  const bookService = new BookService(bookRepository);
-  const bookController = new BookController(bookService);
-
   const shopRepository = new MySqlShopRepository();
   const shopService = new ShopService(shopRepository);
   const shopController = new ShopController(shopService);
+
+  const bookRepository = new MySqlBookRepository();
+  const bookService = new BookService(bookRepository, shopRepository);
+  const bookController = new BookController(bookService);
 
   app.get('/health', (_req, res) => {
     res.status(200).json({ service: 'chaonangsue-backend', status: 'ok' });

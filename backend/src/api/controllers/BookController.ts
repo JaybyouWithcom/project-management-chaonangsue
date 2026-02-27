@@ -50,6 +50,7 @@ export class BookController {
     }
 
     const {
+      shopId,
       title,
       author,
       isbn,
@@ -75,9 +76,14 @@ export class BookController {
     if (parsedBookPrice === undefined) {
       throw new AppError('bookPrice must be a number', 400);
     }
+    const parsedShopId = parseNumber(shopId);
+    if (!parsedShopId || !Number.isInteger(parsedShopId)) {
+      throw new AppError('shopId must be an integer', 400);
+    }
 
     const result = await this.bookService.create({
       ownerId: req.auth.userId,
+      shopId: parsedShopId,
       title,
       imagePath,
       author,
@@ -96,6 +102,7 @@ export class BookController {
     const limit = Math.min(50, Math.max(1, Number(req.query.limit ?? 10)));
 
     const result = await this.bookService.search({
+      shopId: parseNumber(req.query.shopId),
       q: isNonEmptyString(req.query.q) ? req.query.q : undefined,
       genre: isNonEmptyString(req.query.genre) ? req.query.genre : undefined,
       minPrice: parseNumber(req.query.minPrice),

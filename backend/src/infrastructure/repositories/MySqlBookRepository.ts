@@ -7,6 +7,7 @@ import { dbPool } from '../database/mysql.js';
 interface BookRow extends RowDataPacket {
   book_id: number;
   owner_id: number;
+  shop_id: number | null;
   title: string;
   image_path: string;
   author: string;
@@ -24,11 +25,13 @@ const baseSelect = `
   SELECT b.*, u.username AS owner_name
   FROM books b
   JOIN users u ON u.user_id = b.owner_id
+  LEFT JOIN shops s ON s.shop_id = b.shop_id
 `;
 
 const mapBook = (row: BookRow): Book => ({
   bookId: row.book_id,
   ownerId: row.owner_id,
+  shopId: row.shop_id,
   title: row.title,
   imagePath: row.image_path,
   author: row.author,
@@ -45,10 +48,11 @@ const mapBook = (row: BookRow): Book => ({
 export class MySqlBookRepository implements BookRepository {
   async create(input: CreateBookInput): Promise<Book> {
     const [result] = await dbPool.query<ResultSetHeader>(
-      `INSERT INTO books (owner_id, title, image_path, author, isbn, genre, book_condition, description, book_price, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Available')`,
+      `INSERT INTO books (owner_id, shop_id, title, image_path, author, isbn, genre, book_condition, description, book_price, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Available')`,
       [
         input.ownerId,
+        input.shopId,
         input.title,
         input.imagePath,
         input.author,
@@ -77,6 +81,13 @@ export class MySqlBookRepository implements BookRepository {
     const whereClauses: string[] = ['b.status = ?'];
     const values: Array<string | number> = ['Available'];
 
+    whereClauses.push('(b.shop_id IS NULL OR s.deleted_at IS NULL)');
+
+    if (query.shopId !== undefined) {
+      whereClauses.push('b.shop_id = ?');
+      values.push(query.shopId);
+    }
+
     if (query.q) {
       whereClauses.push('(b.title LIKE ? OR b.author LIKE ? OR b.isbn = ?)');
       values.push(`%${query.q}%`, `%${query.q}%`, query.q);
@@ -100,7 +111,10 @@ export class MySqlBookRepository implements BookRepository {
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
     const [countRows] = await dbPool.query<RowDataPacket[]>(
-      `SELECT COUNT(*) as total FROM books b ${whereSql}`,
+      `SELECT COUNT(*) as total
+       FROM books b
+       LEFT JOIN shops s ON s.shop_id = b.shop_id
+       ${whereSql}`,
       values,
     );
 
@@ -116,10 +130,10 @@ export class MySqlBookRepository implements BookRepository {
     };
   }
 
-  async existsByOwnerAndTitle(ownerId: number, title: string): Promise<boolean> {
+  async existsByShopAndTitle(shopId: number, title: string): Promise<boolean> {
     const [rows] = await dbPool.query<RowDataPacket[]>(
-      'SELECT 1 FROM books WHERE owner_id = ? AND title = ? LIMIT 1',
-      [ownerId, title],
+      'SELECT 1 FROM books WHERE shop_id = ? AND title = ? LIMIT 1',
+      [shopId, title],
     );
 
     return rows.length > 0;

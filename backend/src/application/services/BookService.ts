@@ -1,9 +1,11 @@
 import type { Book, RentalPlan } from '../../domain/entities/Book.js';
 import type { BookRepository } from '../../domain/repositories/BookRepository.js';
+import type { ShopRepository } from '../../domain/repositories/ShopRepository.js';
 import { AppError } from '../../shared/errors/AppError.js';
 
 interface CreateBookInput {
   ownerId: number;
+  shopId: number;
   title: string;
   imagePath: string;
   author: string;
@@ -15,6 +17,7 @@ interface CreateBookInput {
 }
 
 interface SearchBooksInput {
+  shopId?: number;
   q?: string;
   genre?: string;
   minPrice?: number;
@@ -38,10 +41,18 @@ const depositRate = 0.5;
 const toMoney = (value: number): number => Math.round(value * 100) / 100;
 
 export class BookService {
-  constructor(private readonly bookRepository: BookRepository) {}
+  constructor(
+    private readonly bookRepository: BookRepository,
+    private readonly shopRepository: ShopRepository,
+  ) {}
 
   async create(input: CreateBookInput): Promise<Book> {
-    if (await this.bookRepository.existsByOwnerAndTitle(input.ownerId, input.title)) {
+    const shop = await this.shopRepository.findById(input.shopId);
+    if (!shop || shop.userId !== input.ownerId) {
+      throw new AppError('ไม่พบร้านที่คุณเลือก หรือคุณไม่มีสิทธิ์จัดการร้านนี้', 403);
+    }
+
+    if (await this.bookRepository.existsByShopAndTitle(input.shopId, input.title)) {
       throw new AppError('หนังสือนี้ถูกลงในร้านของคุณแล้ว', 409);
     }
 

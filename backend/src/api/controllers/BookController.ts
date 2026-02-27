@@ -97,8 +97,14 @@ export class BookController {
   list = async (req: Request, res: Response): Promise<void> => {
     const page = Math.max(1, Number(req.query.page ?? 1));
     const limit = Math.min(50, Math.max(1, Number(req.query.limit ?? 10)));
+    const ownerOnly = req.query.ownerOnly === 'true';
+
+    if (ownerOnly && !req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
 
     const result = await this.bookService.search({
+      ownerId: ownerOnly ? req.auth?.userId : undefined,
       q: isNonEmptyString(req.query.q) ? req.query.q : undefined,
       genre: isNonEmptyString(req.query.genre) ? req.query.genre : undefined,
       minPrice: parseNumber(req.query.minPrice),

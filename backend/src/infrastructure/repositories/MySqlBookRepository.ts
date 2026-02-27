@@ -77,8 +77,16 @@ export class MySqlBookRepository implements BookRepository {
   }
 
   async findAvailable(query: BookQuery): Promise<{ items: Book[]; total: number }> {
-    const whereClauses: string[] = ['b.status = ?'];
-    const values: Array<string | number> = ['Available'];
+    const whereClauses: string[] = [];
+    const values: Array<string | number> = [];
+
+    if (query.ownerId !== undefined) {
+      whereClauses.push('b.owner_id = ?');
+      values.push(query.ownerId);
+    } else {
+      whereClauses.push('b.status = ?');
+      values.push('Available');
+    }
 
     if (query.q) {
       whereClauses.push('(b.title LIKE ? OR b.author LIKE ? OR b.isbn = ?)');

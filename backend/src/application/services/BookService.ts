@@ -16,6 +16,7 @@ interface CreateBookInput {
 }
 
 interface SearchBooksInput {
+  ownerId?: number;
   q?: string;
   genre?: string;
   minPrice?: number;

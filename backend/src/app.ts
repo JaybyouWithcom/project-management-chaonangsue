@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import express from 'express';
 
 import { AuthService } from './application/services/AuthService.js';

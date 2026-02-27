@@ -10,6 +10,7 @@ import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
+import { normalizeConditionLabel } from "@/lib/bookCondition";
 
 type Plan = "15days" | "30days";
 
@@ -173,7 +174,7 @@ const BookDetail = () => {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant="secondary">{book.genre ?? 'อื่นๆ'}</Badge>
-                <Badge className="bg-accent text-accent-foreground border-0">{book.bookCondition ?? '-'}</Badge>
+                <Badge className="bg-accent text-accent-foreground border-0">{normalizeConditionLabel(book.bookCondition)}</Badge>
               </div>
               <h1 className="font-display text-3xl md:text-4xl font-bold">{book.title}</h1>
               <p className="text-muted-foreground mt-1">โดย {book.author} • เจ้าของร้าน {book.ownerName}</p>

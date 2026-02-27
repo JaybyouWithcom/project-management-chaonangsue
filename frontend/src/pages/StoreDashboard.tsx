@@ -16,7 +16,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+<<<<<<< HEAD:frontend/src/pages/AdminDashboard.tsx
 import { genres } from "@/lib/mockData";
+=======
+import { mockOrders, genres } from "@/lib/mockData";
+import { conditionOptions, normalizeConditionLabel } from "@/lib/bookCondition";
+>>>>>>> a06a4b1040207658978745bc4a645e9fc180b423:frontend/src/pages/StoreDashboard.tsx
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
@@ -58,7 +63,7 @@ const paymentStatusColors: Record<string, string> = {
   "ยกเลิก": "bg-destructive/20 text-destructive",
 };
 
-const AdminDashboard = () => {
+const StoreDashboard = () => {
   const [searchParams] = useSearchParams();
   const shopId = Number(searchParams.get("shopId"));
   const hasValidShopId = Number.isInteger(shopId) && shopId > 0;
@@ -73,7 +78,7 @@ const AdminDashboard = () => {
     isbn: "",
     genre: "",
     bookPrice: "",
-    bookCondition: "3",
+    bookCondition: "2",
     description: "",
   });
 
@@ -147,7 +152,7 @@ const AdminDashboard = () => {
         imageBase64,
       }, token);
       toast({ title: "เพิ่มหนังสือสำเร็จ! 📚" });
-      setForm({ title: "", author: "", isbn: "", genre: "", bookPrice: "", bookCondition: "3", description: "" });
+      setForm({ title: "", author: "", isbn: "", genre: "", bookPrice: "", bookCondition: "2", description: "" });
       setImageFile(null);
       await queryClient.invalidateQueries({ queryKey: ["admin-books"] });
     } catch (error) {
@@ -196,6 +201,13 @@ const AdminDashboard = () => {
                   </div>
                   <div><Label>ราคาหนังสือ</Label><Input type="number" value={form.bookPrice} onChange={(e) => setForm((p) => ({ ...p, bookPrice: e.target.value }))} /></div>
                 </div>
+                <div>
+                  <Label>สภาพหนังสือ</Label>
+                  <Select value={form.bookCondition} onValueChange={(bookCondition) => setForm((p) => ({ ...p, bookCondition }))}>
+                    <SelectTrigger><SelectValue placeholder="เลือกสภาพ" /></SelectTrigger>
+                    <SelectContent>{conditionOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
                 <p className="text-xs text-muted-foreground">ระบบจะคำนวณอัตโนมัติ: มัดจำ 50% | เช่า 15 วัน 30% | เช่า 30 วัน 50%</p>
                 <div><Label>รายละเอียด</Label><Input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} /></div>
                 <Button className="w-full bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleCreateBook}>บันทึก</Button>
@@ -243,6 +255,7 @@ const AdminDashboard = () => {
                       <p className="font-semibold truncate">{book.title}</p>
                       <p className="text-sm text-muted-foreground truncate">{book.author}</p>
                       <p className="text-xs text-muted-foreground">ราคาหนังสือ ฿{book.bookPrice}</p>
+                      <p className="text-xs text-muted-foreground">สภาพหนังสือ: {normalizeConditionLabel(book.bookCondition)}</p>
                     </div>
                     <Badge variant={book.status === 'Available' ? 'default' : 'secondary'}>{book.status}</Badge>
                     <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
@@ -295,4 +308,4 @@ const AdminDashboard = () => {
   );
 };
 
-export default AdminDashboard;
+export default StoreDashboard;

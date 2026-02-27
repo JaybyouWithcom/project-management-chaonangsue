@@ -9,7 +9,7 @@ import BookCard from "@/components/BookCard";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { conditions, genres, type Book as MockBook } from "@/lib/mockData";
-import { apiGet } from "@/lib/api";
+import { apiGet, resolveImageUrl } from "@/lib/api";
 
 interface ApiBook {
   bookId: number;
@@ -32,7 +32,7 @@ const toUiBook = (book: ApiBook): MockBook => ({
   author: book.author,
   isbn: book.isbn ?? "-",
   genre: book.genre ?? "อื่นๆ",
-  cover: book.imagePath,
+  cover: resolveImageUrl(book.imagePath),
   condition: book.bookCondition ?? "3",
   minRentalPrice: Number(book.rentalPrice),
   pricePerDay: Number(book.rentalPrice),

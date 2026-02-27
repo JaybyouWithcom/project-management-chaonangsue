@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiGet, HttpError, resolveImageUrl } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 
-type Plan = "7days" | "14days" | "30days";
+type Plan = "15days" | "30days";
 
 interface BookDetailData {
   bookId: number;
@@ -22,8 +22,7 @@ interface BookDetailData {
   author: string;
   isbn: string | null;
   description: string | null;
-  depositPrice: string;
-  rentalPrice: string;
+  bookPrice: string;
   status: "Available" | "Rented";
   ownerName: string;
 }
@@ -31,12 +30,13 @@ interface BookDetailData {
 interface QuoteData {
   rentalPlan: Plan;
   dueDate: string;
+  rentalPrice: number;
+  depositPrice: number;
   totalAmount: number;
 }
 
 const planLabels: Record<Plan, string> = {
-  "7days": "7 วัน",
-  "14days": "14 วัน",
+  "15days": "15 วัน",
   "30days": "30 วัน",
 };
 
@@ -145,11 +145,11 @@ const BookDetail = () => {
             <div className="bg-card rounded-xl border p-5 space-y-5">
               <div>
                 <h3 className="text-lg font-bold mb-1">เลือกแผนการเช่า</h3>
-                <p className="text-sm text-muted-foreground">ค่ามัดจำ: ฿{book.depositPrice}</p>
+                <p className="text-sm text-muted-foreground">ราคาหนังสือ: ฿{book.bookPrice}</p>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
-                {(["7days", "14days", "30days"] as Plan[]).map((plan) => (
+                {(["15days", "30days"] as Plan[]).map((plan) => (
                   <Button
                     key={plan}
                     variant={selectedPlan === plan ? "default" : "outline"}
@@ -157,15 +157,15 @@ const BookDetail = () => {
                     className="h-auto py-4 flex flex-col items-center"
                   >
                     <span className="font-semibold">{planLabels[plan]}</span>
-                    <span className="text-xs mt-1 opacity-80">฿{book.rentalPrice}</span>
+                    <span className="text-xs mt-1 opacity-80">คำนวณตามอัตรา</span>
                   </Button>
                 ))}
               </div>
 
               {quoteQuery.data && selectedPlan && (
                 <div className="space-y-2 border-t pt-4 text-sm">
-                  <div className="flex justify-between"><span className="text-muted-foreground">ค่าเช่า ({planLabels[selectedPlan]})</span><span>฿{book.rentalPrice}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">ค่ามัดจำ</span><span>฿{book.depositPrice}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">ค่าเช่า ({planLabels[selectedPlan]})</span><span>฿{quoteQuery.data.rentalPrice}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">ค่ามัดจำ</span><span>฿{quoteQuery.data.depositPrice}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">กำหนดคืน</span><span>{quoteQuery.data.dueDate}</span></div>
                   <div className="flex justify-between text-base font-bold border-t pt-2"><span>รวมที่ต้องชำระ</span><span className="text-primary">฿{quoteQuery.data.totalAmount}</span></div>
                 </div>

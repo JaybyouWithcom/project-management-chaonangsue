@@ -14,8 +14,7 @@ interface BookRow extends RowDataPacket {
   genre: string | null;
   book_condition: '1' | '2' | '3' | '4' | '5' | null;
   description: string | null;
-  rental_price: string;
-  deposit_price: string;
+  book_price: string;
   status: 'Available' | 'Rented';
   created_at: Date;
   owner_name: string;
@@ -37,8 +36,7 @@ const mapBook = (row: BookRow): Book => ({
   genre: row.genre,
   bookCondition: row.book_condition,
   description: row.description,
-  rentalPrice: row.rental_price,
-  depositPrice: row.deposit_price,
+  bookPrice: row.book_price,
   status: row.status,
   createdAt: row.created_at,
   ownerName: row.owner_name,
@@ -47,8 +45,8 @@ const mapBook = (row: BookRow): Book => ({
 export class MySqlBookRepository implements BookRepository {
   async create(input: CreateBookInput): Promise<Book> {
     const [result] = await dbPool.query<ResultSetHeader>(
-      `INSERT INTO books (owner_id, title, image_path, author, isbn, genre, book_condition, description, rental_price, deposit_price, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Available')`,
+      `INSERT INTO books (owner_id, title, image_path, author, isbn, genre, book_condition, description, book_price, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Available')`,
       [
         input.ownerId,
         input.title,
@@ -58,8 +56,7 @@ export class MySqlBookRepository implements BookRepository {
         input.genre ?? null,
         input.bookCondition ?? null,
         input.description ?? null,
-        input.rentalPrice,
-        input.depositPrice,
+        input.bookPrice,
       ],
     );
 
@@ -77,16 +74,8 @@ export class MySqlBookRepository implements BookRepository {
   }
 
   async findAvailable(query: BookQuery): Promise<{ items: Book[]; total: number }> {
-    const whereClauses: string[] = [];
-    const values: Array<string | number> = [];
-
-    if (query.ownerId !== undefined) {
-      whereClauses.push('b.owner_id = ?');
-      values.push(query.ownerId);
-    } else {
-      whereClauses.push('b.status = ?');
-      values.push('Available');
-    }
+    const whereClauses: string[] = ['b.status = ?'];
+    const values: Array<string | number> = ['Available'];
 
     if (query.q) {
       whereClauses.push('(b.title LIKE ? OR b.author LIKE ? OR b.isbn = ?)');
@@ -99,12 +88,12 @@ export class MySqlBookRepository implements BookRepository {
     }
 
     if (query.minPrice !== undefined) {
-      whereClauses.push('b.rental_price >= ?');
+      whereClauses.push('b.book_price >= ?');
       values.push(query.minPrice);
     }
 
     if (query.maxPrice !== undefined) {
-      whereClauses.push('b.rental_price <= ?');
+      whereClauses.push('b.book_price <= ?');
       values.push(query.maxPrice);
     }
 

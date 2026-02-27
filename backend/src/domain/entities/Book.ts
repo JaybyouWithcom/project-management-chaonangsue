@@ -1,5 +1,5 @@
 export type BookStatus = 'Available' | 'Rented';
-export type RentalPlan = '7days' | '14days' | '30days';
+export type RentalPlan = '15days' | '30days';
 
 export interface Book {
   bookId: number;
@@ -11,8 +11,7 @@ export interface Book {
   genre: string | null;
   bookCondition: '1' | '2' | '3' | '4' | '5' | null;
   description: string | null;
-  rentalPrice: string;
-  depositPrice: string;
+  bookPrice: string;
   status: BookStatus;
   createdAt: Date;
   ownerName: string;
@@ -27,12 +26,10 @@ export interface CreateBookInput {
   genre?: string;
   bookCondition?: '1' | '2' | '3' | '4' | '5';
   description?: string;
-  rentalPrice: number;
-  depositPrice: number;
+  bookPrice: number;
 }
 
 export interface BookQuery {
-  ownerId?: number;
   q?: string;
   genre?: string;
   minPrice?: number;

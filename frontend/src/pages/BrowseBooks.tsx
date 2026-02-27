@@ -19,8 +19,7 @@ interface ApiBook {
   isbn: string | null;
   genre: string | null;
   bookCondition: string | null;
-  rentalPrice: string;
-  depositPrice: string;
+  bookPrice: string;
   status: "Available" | "Rented";
   ownerName: string;
   description: string | null;
@@ -34,9 +33,9 @@ const toUiBook = (book: ApiBook): MockBook => ({
   genre: book.genre ?? "อื่นๆ",
   cover: resolveImageUrl(book.imagePath),
   condition: book.bookCondition ?? "3",
-  minRentalPrice: Number(book.rentalPrice),
-  pricePerDay: Number(book.rentalPrice),
-  deposit: Number(book.depositPrice),
+  minRentalPrice: Math.round(Number(book.bookPrice) * 0.3),
+  pricePerDay: Math.round(Number(book.bookPrice) * 0.3),
+  deposit: Math.round(Number(book.bookPrice) * 0.5),
   description: book.description ?? "",
   available: book.status === "Available",
   rating: 4.5,

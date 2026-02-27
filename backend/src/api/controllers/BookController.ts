@@ -20,7 +20,7 @@ const parseNumber = (value: unknown): number | undefined => {
   return Number.isFinite(num) ? num : undefined;
 };
 
-const isRentalPlan = (value: unknown): value is RentalPlan => value === '7days' || value === '14days' || value === '30days';
+const isRentalPlan = (value: unknown): value is RentalPlan => value === '15days' || value === '30days';
 
 const saveImageFromDataUrl = async (imageBase64: string): Promise<string> => {
   const matched = imageBase64.match(/^data:(image\/(png|jpeg|jpg|webp));base64,(.+)$/);
@@ -56,8 +56,7 @@ export class BookController {
       genre,
       bookCondition,
       description,
-      rentalPrice,
-      depositPrice,
+      bookPrice,
       imageBase64,
     } = req.body as Record<string, unknown>;
 
@@ -71,11 +70,10 @@ export class BookController {
 
     const imagePath = await saveImageFromDataUrl(imageBase64);
 
-    const parsedRentalPrice = parseNumber(rentalPrice);
-    const parsedDepositPrice = parseNumber(depositPrice);
+    const parsedBookPrice = parseNumber(bookPrice);
 
-    if (parsedRentalPrice === undefined || parsedDepositPrice === undefined) {
-      throw new AppError('rentalPrice and depositPrice must be numbers', 400);
+    if (parsedBookPrice === undefined) {
+      throw new AppError('bookPrice must be a number', 400);
     }
 
     const result = await this.bookService.create({
@@ -87,8 +85,7 @@ export class BookController {
       genre: isNonEmptyString(genre) ? genre : undefined,
       bookCondition: isNonEmptyString(bookCondition) ? (bookCondition as '1' | '2' | '3' | '4' | '5') : undefined,
       description: isNonEmptyString(description) ? description : undefined,
-      rentalPrice: parsedRentalPrice,
-      depositPrice: parsedDepositPrice,
+      bookPrice: parsedBookPrice,
     });
 
     sendSuccess(res, { book: result }, 201);
@@ -97,14 +94,8 @@ export class BookController {
   list = async (req: Request, res: Response): Promise<void> => {
     const page = Math.max(1, Number(req.query.page ?? 1));
     const limit = Math.min(50, Math.max(1, Number(req.query.limit ?? 10)));
-    const ownerOnly = req.query.ownerOnly === 'true';
-
-    if (ownerOnly && !req.auth?.userId) {
-      throw new AppError('Unauthorized', 401);
-    }
 
     const result = await this.bookService.search({
-      ownerId: ownerOnly ? req.auth?.userId : undefined,
       q: isNonEmptyString(req.query.q) ? req.query.q : undefined,
       genre: isNonEmptyString(req.query.genre) ? req.query.genre : undefined,
       minPrice: parseNumber(req.query.minPrice),

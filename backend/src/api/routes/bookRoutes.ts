@@ -3,14 +3,10 @@ import type { RequestHandler } from 'express';
 
 import type { BookController } from '../controllers/BookController.js';
 
-export const buildBookRoutes = (
-  bookController: BookController,
-  authMiddleware: RequestHandler,
-  optionalAuthMiddleware: RequestHandler,
-): Router => {
+export const buildBookRoutes = (bookController: BookController, authMiddleware: RequestHandler): Router => {
   const router = Router();
 
-  router.get('/', optionalAuthMiddleware, (req, res, next) => {
+  router.get('/', (req, res, next) => {
     bookController.list(req, res).catch(next);
   });
 

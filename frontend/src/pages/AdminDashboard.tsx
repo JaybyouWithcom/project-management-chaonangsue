@@ -28,16 +28,8 @@ interface ApiBook {
   isbn: string | null;
   genre: string | null;
   bookCondition: string | null;
-  rentalPrice: string;
-  depositPrice: string;
+  bookPrice: string;
   status: "Available" | "Rented";
-}
-
-interface ApiShop {
-  shopId: number;
-  shopName: string;
-  description: string | null;
-  createdAt: string;
 }
 
 const paymentStatusColors: Record<string, string> = {
@@ -52,32 +44,20 @@ const AdminDashboard = () => {
   const queryClient = useQueryClient();
   const [bookSearch, setBookSearch] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [shopForm, setShopForm] = useState({ shopName: "", description: "" });
   const [form, setForm] = useState({
     title: "",
     author: "",
     isbn: "",
     genre: "",
-    rentalPrice: "",
-    depositPrice: "",
+    bookPrice: "",
     bookCondition: "3",
     description: "",
   });
 
-  const { data: shops = [] } = useQuery({
-    queryKey: ["my-shops", token],
-    enabled: Boolean(token),
-    queryFn: async () => {
-      const result = await apiGet<{ shops: ApiShop[] }>("/api/shops", token ?? undefined);
-      return result.data.shops;
-    },
-  });
-
   const { data: books = [], isError } = useQuery({
-    queryKey: ["admin-books", token],
-    enabled: Boolean(token),
+    queryKey: ["admin-books"],
     queryFn: async () => {
-      const result = await apiGet<{ books: ApiBook[] }>("/api/books?limit=100&ownerOnly=true", token ?? undefined);
+      const result = await apiGet<{ books: ApiBook[] }>("/api/books?limit=100");
       return result.data.books;
     },
   });
@@ -92,34 +72,10 @@ const AdminDashboard = () => {
     b.author.toLowerCase().includes(bookSearch.toLowerCase()),
   ), [books, bookSearch]);
 
-  const handleCreateShop = async () => {
-    if (!token) {
-      toast({ title: "กรุณาเข้าสู่ระบบก่อน", variant: "destructive" });
-      return;
-    }
-
-    try {
-      await apiPost("/api/shops", shopForm, token);
-      toast({ title: "สร้างร้านสำเร็จ" });
-      setShopForm({ shopName: "", description: "" });
-      await queryClient.invalidateQueries({ queryKey: ["my-shops"] });
-    } catch (error) {
-      toast({
-        title: "สร้างร้านไม่สำเร็จ",
-        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleCreateBook = async () => {
+    const token = getAuthToken();
     if (!token) {
       toast({ title: "กรุณา login ก่อนลงหนังสือ", variant: "destructive" });
-      return;
-    }
-
-    if (shops.length === 0) {
-      toast({ title: "กรุณาเพิ่มร้านก่อนลงหนังสือ", variant: "destructive" });
       return;
     }
 
@@ -132,25 +88,24 @@ const AdminDashboard = () => {
       const imageBase64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
-          if (typeof reader.result === "string") {
+          if (typeof reader.result === 'string') {
             resolve(reader.result);
             return;
           }
 
-          reject(new Error("อ่านไฟล์รูปไม่สำเร็จ"));
+          reject(new Error('อ่านไฟล์รูปไม่สำเร็จ'));
         };
-        reader.onerror = () => reject(new Error("อ่านไฟล์รูปไม่สำเร็จ"));
+        reader.onerror = () => reject(new Error('อ่านไฟล์รูปไม่สำเร็จ'));
         reader.readAsDataURL(imageFile);
       });
 
       await apiPost("/api/books", {
         ...form,
-        rentalPrice: Number(form.rentalPrice),
-        depositPrice: Number(form.depositPrice),
+        bookPrice: Number(form.bookPrice),
         imageBase64,
       }, token);
       toast({ title: "เพิ่มหนังสือสำเร็จ! 📚" });
-      setForm({ title: "", author: "", isbn: "", genre: "", rentalPrice: "", depositPrice: "", bookCondition: "3", description: "" });
+      setForm({ title: "", author: "", isbn: "", genre: "", bookPrice: "", bookCondition: "3", description: "" });
       setImageFile(null);
       await queryClient.invalidateQueries({ queryKey: ["admin-books"] });
     } catch (error) {
@@ -171,70 +126,47 @@ const AdminDashboard = () => {
             <h1 className="font-display text-3xl md:text-4xl font-bold">แดชบอร์ดร้าน</h1>
             <p className="text-muted-foreground mt-1">จัดการคลัง คำสั่งเช่า และรายได้</p>
           </div>
-          <div className="flex gap-2">
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Store className="mr-2 h-4 w-4" /> เพิ่มร้าน
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader><DialogTitle className="font-display">เพิ่มร้านของฉัน</DialogTitle></DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div><Label>ชื่อร้าน</Label><Input value={shopForm.shopName} onChange={(e) => setShopForm((p) => ({ ...p, shopName: e.target.value }))} /></div>
-                  <div><Label>รายละเอียดร้าน</Label><Input value={shopForm.description} onChange={(e) => setShopForm((p) => ({ ...p, description: e.target.value }))} /></div>
-                  <Button className="w-full" onClick={handleCreateShop}>สร้างร้าน</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button className="bg-primary text-primary-foreground" disabled={shops.length === 0}>
-                  <Plus className="mr-2 h-4 w-4" /> เพิ่มหนังสือ
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="font-display">เพิ่มหนังสือใหม่</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div><Label>ชื่อหนังสือ</Label><Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} /></div>
-                  <div><Label>ผู้เขียน</Label><Input value={form.author} onChange={(e) => setForm((p) => ({ ...p, author: e.target.value }))} /></div>
-                  <div><Label>ISBN</Label><Input value={form.isbn} onChange={(e) => setForm((p) => ({ ...p, isbn: e.target.value }))} /></div>
-                  <div><Label>หมวดหมู่</Label><Select value={form.genre} onValueChange={(v) => setForm((p) => ({ ...p, genre: v }))}><SelectTrigger><SelectValue placeholder="เลือกหมวดหมู่" /></SelectTrigger><SelectContent>{genres.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent></Select></div>
-                  <div><Label>สภาพหนังสือ</Label><Select value={form.bookCondition} onValueChange={(v) => setForm((p) => ({ ...p, bookCondition: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["5", "4", "3", "2", "1"].map((s) => <SelectItem key={s} value={s}>{s}/5</SelectItem>)}</SelectContent></Select></div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><Label>ค่าเช่า (บาท)</Label><Input type="number" value={form.rentalPrice} onChange={(e) => setForm((p) => ({ ...p, rentalPrice: e.target.value }))} /></div>
-                    <div><Label>มัดจำ (บาท)</Label><Input type="number" value={form.depositPrice} onChange={(e) => setForm((p) => ({ ...p, depositPrice: e.target.value }))} /></div>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="bg-primary text-primary-foreground">
+                <Plus className="mr-2 h-4 w-4" /> เพิ่มหนังสือ
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="font-display">เพิ่มหนังสือใหม่</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div><Label>ชื่อหนังสือ</Label><Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} /></div>
+                <div><Label>ผู้เขียน</Label><Input value={form.author} onChange={(e) => setForm((p) => ({ ...p, author: e.target.value }))} /></div>
+                <div><Label>ISBN</Label><Input value={form.isbn} onChange={(e) => setForm((p) => ({ ...p, isbn: e.target.value }))} /></div>
+                <div><Label>รูปปกหนังสือ</Label><Input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>หมวดหมู่</Label>
+                    <Select value={form.genre} onValueChange={(genre) => setForm((p) => ({ ...p, genre }))}>
+                      <SelectTrigger><SelectValue placeholder="เลือก" /></SelectTrigger>
+                      <SelectContent>{genres.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+                    </Select>
                   </div>
-                  <div><Label>เลือกรูปหนังสือ</Label><Input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} /></div>
-                  <Button className="w-full" onClick={handleCreateBook}>บันทึกหนังสือ</Button>
+                  <div><Label>ราคาหนังสือ</Label><Input type="number" value={form.bookPrice} onChange={(e) => setForm((p) => ({ ...p, bookPrice: e.target.value }))} /></div>
                 </div>
-              </DialogContent>
-            </Dialog>
-          </div>
+                <p className="text-xs text-muted-foreground">ระบบจะคำนวณอัตโนมัติ: มัดจำ 50% | เช่า 15 วัน 30% | เช่า 30 วัน 50%</p>
+                <div><Label>รายละเอียด</Label><Input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} /></div>
+                <Button className="w-full bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleCreateBook}>บันทึก</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
-        {!token && <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 mb-6">กรุณาเข้าสู่ระบบก่อนใช้งานเมนูร้านของฉัน</div>}
-        {token && shops.length === 0 && <div className="rounded-lg border border-warning/50 bg-warning/10 p-4 mb-6">ยังไม่มีร้าน กรุณากดปุ่ม "เพิ่มร้าน" เพื่อสร้างร้านก่อน (สร้างได้หลายร้าน)</div>}
+        {isError && <p className="text-destructive mb-4">โหลดข้อมูลหนังสือจาก API ไม่สำเร็จ</p>}
 
-        {token && shops.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            {shops.map((shop) => (
-              <div key={shop.shopId} className="rounded-xl border p-4 bg-card">
-                <div className="font-semibold">{shop.shopName}</div>
-                <div className="text-sm text-muted-foreground">{shop.description || "ไม่มีรายละเอียด"}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
             { label: "รายได้รวม", value: `฿${totalRevenue.toLocaleString()}`, icon: DollarSign, color: "text-success", sub: `+฿${totalPenalty.toLocaleString()} ค่าปรับ` },
             { label: "ออเดอร์เลยกำหนด", value: overdueCount, icon: AlertTriangle, color: "text-destructive", sub: "ต้องติดตาม" },
             { label: "กำลังเช่า", value: activeRentals, icon: Package, color: "text-info", sub: "รายการ" },
-            { label: "หนังสือในระบบ", value: books.length, icon: BookOpen, color: "text-accent", sub: `${books.filter(b => b.status === "Available").length} ว่างอยู่` },
+            { label: "หนังสือในระบบ", value: books.length, icon: BookOpen, color: "text-accent", sub: `${books.filter(b => b.status === 'Available').length} ว่างอยู่` },
           ].map((card) => (
             <div key={card.label} className="bg-card rounded-xl border p-4">
               <div className="flex items-center gap-2 mb-2"><card.icon className={`h-5 w-5 ${card.color}`} /><span className="text-sm text-muted-foreground">{card.label}</span></div>
@@ -265,9 +197,9 @@ const AdminDashboard = () => {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{book.title}</p>
                       <p className="text-sm text-muted-foreground truncate">{book.author}</p>
-                      <p className="text-xs text-muted-foreground">฿{book.rentalPrice} / มัดจำ ฿{book.depositPrice}</p>
+                      <p className="text-xs text-muted-foreground">ราคาหนังสือ ฿{book.bookPrice}</p>
                     </div>
-                    <Badge variant={book.status === "Available" ? "default" : "secondary"}>{book.status}</Badge>
+                    <Badge variant={book.status === 'Available' ? 'default' : 'secondary'}>{book.status}</Badge>
                     <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </div>

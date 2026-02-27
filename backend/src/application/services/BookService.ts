@@ -11,12 +11,10 @@ interface CreateBookInput {
   genre?: string;
   bookCondition?: '1' | '2' | '3' | '4' | '5';
   description?: string;
-  rentalPrice: number;
-  depositPrice: number;
+  bookPrice: number;
 }
 
 interface SearchBooksInput {
-  ownerId?: number;
   q?: string;
   genre?: string;
   minPrice?: number;
@@ -26,10 +24,18 @@ interface SearchBooksInput {
 }
 
 const planDaysMap: Record<RentalPlan, number> = {
-  '7days': 7,
-  '14days': 14,
+  '15days': 15,
   '30days': 30,
 };
+
+const planRateMap: Record<RentalPlan, number> = {
+  '15days': 0.3,
+  '30days': 0.5,
+};
+
+const depositRate = 0.5;
+
+const toMoney = (value: number): number => Math.round(value * 100) / 100;
 
 export class BookService {
   constructor(private readonly bookRepository: BookRepository) {}
@@ -61,18 +67,30 @@ export class BookService {
     return book;
   }
 
-  async getBorrowQuote(bookId: number, plan: RentalPlan): Promise<{ book: Book; rentalPlan: RentalPlan; dueDate: string; totalAmount: number }> {
+  async getBorrowQuote(bookId: number, plan: RentalPlan): Promise<{
+    book: Book;
+    rentalPlan: RentalPlan;
+    dueDate: string;
+    rentalPrice: number;
+    depositPrice: number;
+    totalAmount: number;
+  }> {
     const book = await this.getById(bookId);
     const now = new Date();
     const dueDate = new Date(now);
     dueDate.setDate(dueDate.getDate() + planDaysMap[plan]);
 
-    const totalAmount = Number(book.depositPrice) + Number(book.rentalPrice);
+    const basePrice = Number(book.bookPrice);
+    const rentalPrice = toMoney(basePrice * planRateMap[plan]);
+    const depositPrice = toMoney(basePrice * depositRate);
+    const totalAmount = toMoney(rentalPrice + depositPrice);
 
     return {
       book,
       rentalPlan: plan,
       dueDate: dueDate.toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).replace(' ', 'T'),
+      rentalPrice,
+      depositPrice,
       totalAmount,
     };
   }

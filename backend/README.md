@@ -84,11 +84,11 @@ Error มาตรฐาน:
 - `GET /api/books` (ค้นหา + filter + pagination)
   - query: `q`, `genre`, `minPrice`, `maxPrice`, `page`, `limit`
 - `GET /api/books/:bookId` (รายละเอียดหนังสือที่พร้อมให้เช่า)
-- `GET /api/books/:bookId/quote?plan=7days|14days|30days`
+- `GET /api/books/:bookId/quote?plan=15days|30days`
   - คำนวณ `dueDate` โดยอิง Asia/Bangkok
-  - คำนวณยอดจ่ายเริ่มต้นแบบ mock: `rental_price + deposit_price`
+  - คำนวณยอดตามอัตรา: มัดจำ 50% ของ `book_price`, ค่าเช่า 15 วัน 30%, ค่าเช่า 30 วัน 50%
 - `POST /api/books` (ลงหนังสือในร้าน, ต้อง login)
-  - body ต้องส่ง `imageBase64` (data URL) เพื่อให้ server บันทึกรูปและเก็บ path ให้อัตโนมัติ
+  - body ต้องส่ง `bookPrice` และ `imageBase64` (data URL) เพื่อให้ server บันทึกรูปและเก็บ path ให้อัตโนมัติ
   - แนะนำให้ frontend รับไฟล์จาก `<input type="file">` แล้วแปลงเป็น base64 ก่อนส่ง API
 
 ## Database Scripts

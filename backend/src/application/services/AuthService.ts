@@ -9,6 +9,9 @@ import { env } from '../../infrastructure/config/env.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import type { AuthJwtPayload } from '../../shared/types/auth.js';
 
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const phoneRegex = /^\d{9,10}$/;
+
 interface RegisterInput {
   firstname: string;
   lastname: string;
@@ -39,7 +42,18 @@ export class AuthService {
   constructor(private readonly userRepository: UserRepository) {}
 
   async register(input: RegisterInput): Promise<AuthResponse> {
-    await this.assertUniqueness(input);
+    const email = input.email.trim().toLowerCase();
+    const phoneNumber = input.phoneNumber?.trim() ? input.phoneNumber.trim() : undefined;
+
+    if (!emailRegex.test(email)) {
+      throw new AppError('Invalid email format', 400);
+    }
+
+    if (phoneNumber && !phoneRegex.test(phoneNumber)) {
+      throw new AppError('Phone number must be numeric with 9-10 digits', 400);
+    }
+
+    await this.assertUniqueness({ ...input, email, phoneNumber });
 
     const passwordHash = await bcrypt.hash(input.password, env.auth.bcryptSaltRounds);
     let user: User;
@@ -48,8 +62,8 @@ export class AuthService {
         firstname: input.firstname,
         lastname: input.lastname,
         username: input.username,
-        email: input.email,
-        phoneNumber: input.phoneNumber?.trim() ? input.phoneNumber.trim() : null,
+        email,
+        phoneNumber: phoneNumber ?? null,
         passwordHash,
       });
     } catch (error) {
@@ -104,10 +118,15 @@ export class AuthService {
       throw new AppError('Missing required fields', 400);
     }
 
+    const phoneNumber = input.phoneNumber?.trim() ? input.phoneNumber.trim() : null;
+    if (phoneNumber && !phoneRegex.test(phoneNumber)) {
+      throw new AppError('Phone number must be numeric with 9-10 digits', 400);
+    }
+
     const updated = await this.userRepository.updateProfileById(input.userId, {
       firstname: input.firstname.trim(),
       lastname: input.lastname.trim(),
-      phoneNumber: input.phoneNumber?.trim() ? input.phoneNumber.trim() : null,
+      phoneNumber,
     });
 
     return toPublicUser(updated);

@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Search, SlidersHorizontal, Star } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import BookCard from "@/components/BookCard";
 import Navbar from "@/components/Navbar";
@@ -14,16 +15,15 @@ import { type ApiBook, toUiBook } from "@/lib/books";
 
 const BrowseBooks = () => {
   const [search, setSearch] = useState("");
-  const [selectedGenre, setSelectedGenre] = useState<string>("all");
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedCondition, setSelectedCondition] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("popular");
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["books", search, selectedGenre],
+    queryKey: ["books", search],
     queryFn: async () => {
       const query = new URLSearchParams();
       if (search) query.set("q", search);
-      if (selectedGenre !== "all") query.set("genre", selectedGenre);
       query.set("limit", "50");
       const response = await apiGet<{ books: ApiBook[] }>(`/api/books?${query.toString()}`);
       return response.data.books.map(toUiBook);
@@ -32,13 +32,25 @@ const BrowseBooks = () => {
 
   const filtered = useMemo(() => {
     let books = [...(data ?? [])];
+    if (selectedGenres.length > 0) books = books.filter((b) => selectedGenres.includes(b.genre));
     if (selectedCondition !== "all") books = books.filter((b) => b.condition === selectedCondition);
-    if (sortBy === "price-asc") books.sort((a, b) => a.pricePerDay - b.pricePerDay);
-    else if (sortBy === "price-desc") books.sort((a, b) => b.pricePerDay - a.pricePerDay);
+    if (sortBy === "price-asc") books.sort((a, b) => a.minRentalPrice - b.minRentalPrice);
+    else if (sortBy === "price-desc") books.sort((a, b) => b.minRentalPrice - a.minRentalPrice);
     else if (sortBy === "rating") books.sort((a, b) => b.rating - a.rating);
     else books.sort((a, b) => b.totalRentals - a.totalRentals);
     return books;
-  }, [data, selectedCondition, sortBy]);
+  }, [data, selectedCondition, selectedGenres, sortBy]);
+
+  const recommendedBooks = useMemo(
+    () => filtered.filter((book) => book.rating >= 4.5).slice(0, 4),
+    [filtered],
+  );
+
+  const toggleGenre = (genre: string) => {
+    setSelectedGenres((previous) =>
+      previous.includes(genre) ? previous.filter((item) => item !== genre) : [...previous, genre],
+    );
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -58,13 +70,6 @@ const BrowseBooks = () => {
           </div>
           <div className="flex flex-wrap gap-3 items-center">
             <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-            <Select value={selectedGenre} onValueChange={setSelectedGenre}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="หมวดหมู่" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">ทุกหมวดหมู่</SelectItem>
-                {genres.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-              </SelectContent>
-            </Select>
             <Select value={selectedCondition} onValueChange={setSelectedCondition}>
               <SelectTrigger className="w-36"><SelectValue placeholder="สภาพ" /></SelectTrigger>
               <SelectContent>
@@ -82,10 +87,23 @@ const BrowseBooks = () => {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">เลือกได้หลายหมวดหมู่</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {genres.map((genre) => (
+                <label key={genre} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox checked={selectedGenres.includes(genre)} onCheckedChange={() => toggleGenre(genre)} />
+                  <span>{genre}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-2">
-            {selectedGenre !== "all" && (
-              <Badge variant="secondary" className="cursor-pointer" onClick={() => setSelectedGenre("all")}>{selectedGenre} ✕</Badge>
-            )}
+            {selectedGenres.map((genre) => (
+              <Badge key={genre} variant="secondary" className="cursor-pointer" onClick={() => toggleGenre(genre)}>{genre} ✕</Badge>
+            ))}
             {selectedCondition !== "all" && (
               <Badge variant="secondary" className="cursor-pointer" onClick={() => setSelectedCondition("all")}>{selectedCondition} ✕</Badge>
             )}
@@ -98,6 +116,17 @@ const BrowseBooks = () => {
           <p className="text-destructive">โหลดข้อมูลไม่สำเร็จ กรุณาตรวจสอบ backend API</p>
         ) : (
           <>
+            {recommendedBooks.length > 0 && (
+              <section className="mb-8">
+                <h2 className="font-display text-2xl font-bold mb-3 flex items-center gap-2"><Star className="h-5 w-5 text-accent fill-current" /> หนังสือแนะนำจากคะแนนรีวิว</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                  {recommendedBooks.map((book) => (
+                    <BookCard key={`recommended-${book.id}`} book={book} />
+                  ))}
+                </div>
+              </section>
+            )}
+
             <p className="text-sm text-muted-foreground mb-4">พบ {filtered.length} เล่ม</p>
             {filtered.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">

@@ -5,7 +5,7 @@ export interface Book {
   isbn: string;
   genre: string;
   cover: string;
-  condition: "ใหม่มาก" | "ดีมาก" | "ดี" | "พอใช้";
+  condition: "ใหม่มาก" | "ดีมาก" | "ดี" | "พอใช้" | "แย่";
   minRentalPrice: number; // เปลี่ยนจาก pricePerDay เป็น minRentalPrice (ค่าเช่าขั้นต่ำ 15 วัน)
   deposit: number;
   description: string;
@@ -33,7 +33,7 @@ export const genres = [
   "ประวัติศาสตร์", "การ์ตูน", "พัฒนาตัวเอง", "ท่องเที่ยว", "ศิลปะ"
 ];
 
-export const conditions = ["ใหม่มาก", "ดีมาก", "ดี", "พอใช้"];
+export const conditions = ["ใหม่มาก", "ดีมาก", "ดี", "พอใช้", "แย่"];
 
 export const mockBooks: Book[] = [
   {

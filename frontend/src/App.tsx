@@ -7,7 +7,7 @@ import Index from "./pages/Index";
 import BrowseBooks from "./pages/BrowseBooks";
 import BookDetail from "./pages/BookDetail";
 import CustomerDashboard from "./pages/CustomerDashboard";
-import AdminDashboard from "./pages/AdminDashboard";
+import StoreDashboard from "./pages/StoreDashboard";
 import StoreMenu from "./pages/StoreMenu";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/Auth";
@@ -27,7 +27,7 @@ const App = () => (
           <Route path="/book/:id" element={<BookDetail />} />
           <Route path="/dashboard" element={<CustomerDashboard />} />
           <Route path="/admin" element={<StoreMenu />} />
-          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin/dashboard" element={<StoreDashboard />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />

@@ -32,6 +32,7 @@ export interface CreateBookInput {
 }
 
 export interface BookQuery {
+  ownerId?: number;
   q?: string;
   genre?: string;
   minPrice?: number;

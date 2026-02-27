@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   BookOpen, Package, DollarSign, AlertTriangle, Plus, Edit, Trash2,
-  TrendingUp, BarChart3, Users, Search
+  TrendingUp, BarChart3, Users, Search, Store,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -39,6 +39,7 @@ const paymentStatusColors: Record<string, string> = {
 };
 
 const AdminDashboard = () => {
+  const token = getAuthToken();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [bookSearch, setBookSearch] = useState("");
@@ -162,8 +163,8 @@ const AdminDashboard = () => {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
-            { label: "รายได้รวม", value: `฿${totalRevenue.toLocaleString()}`, icon: DollarSign, color: "text-primary", sub: "เดือนนี้" },
-            { label: "ค่าปรับรวม", value: `฿${totalPenalty.toLocaleString()}`, icon: AlertTriangle, color: "text-destructive", sub: `${overdueCount} รายการเลยกำหนด` },
+            { label: "รายได้รวม", value: `฿${totalRevenue.toLocaleString()}`, icon: DollarSign, color: "text-success", sub: `+฿${totalPenalty.toLocaleString()} ค่าปรับ` },
+            { label: "ออเดอร์เลยกำหนด", value: overdueCount, icon: AlertTriangle, color: "text-destructive", sub: "ต้องติดตาม" },
             { label: "กำลังเช่า", value: activeRentals, icon: Package, color: "text-info", sub: "รายการ" },
             { label: "หนังสือในระบบ", value: books.length, icon: BookOpen, color: "text-accent", sub: `${books.filter(b => b.status === 'Available').length} ว่างอยู่` },
           ].map((card) => (
@@ -241,6 +242,8 @@ const AdminDashboard = () => {
             </div>
           </TabsContent>
         </Tabs>
+
+        {isError && <div className="text-sm text-destructive mt-4">โหลดข้อมูลคลังหนังสือไม่สำเร็จ</div>}
       </div>
       <Footer />
     </div>

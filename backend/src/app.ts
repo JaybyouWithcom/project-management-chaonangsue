@@ -1,10 +1,16 @@
+import path from 'node:path';
+
 import express from 'express';
 
 import { AuthService } from './application/services/AuthService.js';
+import { BookService } from './application/services/BookService.js';
 import { AuthController } from './api/controllers/AuthController.js';
+import { BookController } from './api/controllers/BookController.js';
 import { buildAuthMiddleware } from './api/middlewares/authMiddleware.js';
 import { errorHandler } from './api/middlewares/errorHandler.js';
 import { buildAuthRoutes } from './api/routes/authRoutes.js';
+import { buildBookRoutes } from './api/routes/bookRoutes.js';
+import { MySqlBookRepository } from './infrastructure/repositories/MySqlBookRepository.js';
 import { MySqlUserRepository } from './infrastructure/repositories/MySqlUserRepository.js';
 
 export const buildApp = () => {
@@ -12,16 +18,36 @@ export const buildApp = () => {
 
   app.use(express.json());
 
+  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
+
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(204);
+      return;
+    }
+
+    next();
+  });
+
   const userRepository = new MySqlUserRepository();
   const authService = new AuthService(userRepository);
   const authController = new AuthController(authService);
   const authMiddleware = buildAuthMiddleware(authService);
+
+  const bookRepository = new MySqlBookRepository();
+  const bookService = new BookService(bookRepository);
+  const bookController = new BookController(bookService);
 
   app.get('/health', (_req, res) => {
     res.status(200).json({ service: 'chaonangsue-backend', status: 'ok' });
   });
 
   app.use('/api/auth', buildAuthRoutes(authController, authMiddleware));
+  app.use('/api/books', buildBookRoutes(bookController, authMiddleware));
 
   app.use(errorHandler);
 

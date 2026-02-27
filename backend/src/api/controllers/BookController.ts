@@ -147,4 +147,68 @@ export class BookController {
     const quote = await this.bookService.getBorrowQuote(bookId, plan);
     sendSuccess(res, quote);
   };
+
+  rent = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const bookId = Number(req.params.bookId);
+    if (!Number.isInteger(bookId)) {
+      throw new AppError('Invalid bookId', 400);
+    }
+
+    const { plan } = req.body as Record<string, unknown>;
+    if (!isRentalPlan(plan)) {
+      throw new AppError('กรุณาเลือกแผนการยืมหนังสือ', 400);
+    }
+
+    const result = await this.bookService.rent({
+      userId: req.auth.userId,
+      bookId,
+      plan,
+    });
+
+    sendSuccess(res, result, 201);
+  };
+
+  listMyRentals = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const rentals = await this.bookService.listRentalsByUserId(req.auth.userId);
+    sendSuccess(res, { rentals });
+  };
+
+  listShopRentals = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const shopId = parseNumber(req.query.shopId);
+    if (!shopId || !Number.isInteger(shopId)) {
+      throw new AppError('shopId must be an integer', 400);
+    }
+
+    const rentals = await this.bookService.listRentalsByShop(req.auth.userId, shopId);
+    sendSuccess(res, { rentals });
+  };
+
+  payFine = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const rentalId = Number(req.params.rentalId);
+    if (!Number.isInteger(rentalId)) {
+      throw new AppError('Invalid rentalId', 400);
+    }
+
+    const result = await this.bookService.payFine({
+      userId: req.auth.userId,
+      rentalId,
+    });
+    sendSuccess(res, result);
+  };
 }

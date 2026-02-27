@@ -6,6 +6,18 @@ import type { BookController } from '../controllers/BookController.js';
 export const buildBookRoutes = (bookController: BookController, authMiddleware: RequestHandler): Router => {
   const router = Router();
 
+  router.get('/rentals/me', authMiddleware, (req, res, next) => {
+    bookController.listMyRentals(req, res).catch(next);
+  });
+
+  router.get('/rentals/shop', authMiddleware, (req, res, next) => {
+    bookController.listShopRentals(req, res).catch(next);
+  });
+
+  router.post('/rentals/:rentalId/pay-fine', authMiddleware, (req, res, next) => {
+    bookController.payFine(req, res).catch(next);
+  });
+
   router.get('/', (req, res, next) => {
     bookController.list(req, res).catch(next);
   });
@@ -20,6 +32,10 @@ export const buildBookRoutes = (bookController: BookController, authMiddleware: 
 
   router.post('/', authMiddleware, (req, res, next) => {
     bookController.create(req, res).catch(next);
+  });
+
+  router.post('/:bookId/rent', authMiddleware, (req, res, next) => {
+    bookController.rent(req, res).catch(next);
   });
 
   return router;

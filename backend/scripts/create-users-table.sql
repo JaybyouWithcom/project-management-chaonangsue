@@ -7,7 +7,7 @@ CREATE TABLE users (
     phone_number VARCHAR(20) NULL,
     password VARCHAR(255) NOT NULL,
     role ENUM('Customer','Admin','Banned') DEFAULT 'Customer',
-    balance DECIMAL(10,2) DEFAULT 0.00,
+    balance DECIMAL(10,2) DEFAULT 1000.00,
     deleted_at TIMESTAMP NULL DEFAULT NULL,
     INDEX idx_users_deleted_at (deleted_at)
 );

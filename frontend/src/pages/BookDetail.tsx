@@ -1,20 +1,21 @@
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { ArrowLeft, Star, Calendar, Shield, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
-import { apiGet, HttpError, resolveImageUrl } from "@/lib/api";
+import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 
 type Plan = "15days" | "30days";
 
 interface BookDetailData {
   bookId: number;
+  ownerId: number;
   imagePath: string;
   title: string;
   genre: string | null;
@@ -43,9 +44,11 @@ const planLabels: Record<Plan, string> = {
 const BookDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const detailQuery = useQuery({
     queryKey: ["book", id],
@@ -65,7 +68,18 @@ const BookDetail = () => {
     },
   });
 
-  const handleBooking = (): void => {
+  const meQuery = useQuery({
+    queryKey: ["book-detail-me"],
+    enabled: Boolean(getAuthToken()),
+    retry: false,
+    queryFn: async () => {
+      const token = getAuthToken();
+      const response = await apiGet<{ user: { userId: number } }>("/api/auth/me", token ?? undefined);
+      return response.data.user;
+    },
+  });
+
+  const handleBooking = async (): Promise<void> => {
     const token = getAuthToken();
     if (!token) {
       toast({ title: "กรุณา login ก่อนเช่าหนังสือ" });
@@ -77,11 +91,44 @@ const BookDetail = () => {
       toast({ title: "กรุณาเลือกแผนการเช่า", variant: "destructive" });
       return;
     }
+    if (detailQuery.data && meQuery.data?.userId === detailQuery.data.ownerId) {
+      toast({ title: "ไม่สามารถเช่าหนังสือของร้านตัวเองได้", variant: "destructive" });
+      return;
+    }
+    if (!id) {
+      toast({ title: "ไม่พบรหัสหนังสือ", variant: "destructive" });
+      return;
+    }
 
-    toast({
-      title: "พร้อมทำรายการเช่า",
-      description: `แผน ${planLabels[selectedPlan]} ยอดรวม ฿${quoteQuery.data.totalAmount} (mock checkout)`,
-    });
+    setSubmitting(true);
+    try {
+      const result = await apiPost<{
+        bookId: number;
+        rentalPlan: Plan;
+        dueDate: string;
+        totalAmount: number;
+        balanceAfter: number;
+      }>(
+        `/api/books/${id}/rent`,
+        { plan: selectedPlan },
+        token,
+      );
+
+      toast({
+        title: "เช่าหนังสือสำเร็จ",
+        description: `ยอดตัด ฿${result.data.totalAmount} • ยอดคงเหลือ ฿${result.data.balanceAfter}`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["auth-me"] });
+      navigate("/browse");
+    } catch (error) {
+      toast({
+        title: "เช่าไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (detailQuery.isLoading) {
@@ -107,6 +154,7 @@ const BookDetail = () => {
   }
 
   const book = detailQuery.data;
+  const isOwnBook = Boolean(meQuery.data?.userId && meQuery.data.userId === book.ownerId);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -142,7 +190,7 @@ const BookDetail = () => {
 
             <p className="text-foreground/80 leading-relaxed">{book.description ?? 'ไม่มีคำอธิบายเพิ่มเติม'}</p>
 
-            <div className="bg-card rounded-xl border p-5 space-y-5">
+            <div className={`bg-card rounded-xl border p-5 space-y-5 ${isOwnBook ? "opacity-60" : ""}`}>
               <div>
                 <h3 className="text-lg font-bold mb-1">เลือกแผนการเช่า</h3>
                 <p className="text-sm text-muted-foreground">ราคาหนังสือ: ฿{book.bookPrice}</p>
@@ -154,6 +202,7 @@ const BookDetail = () => {
                     key={plan}
                     variant={selectedPlan === plan ? "default" : "outline"}
                     onClick={() => setSelectedPlan(plan)}
+                    disabled={isOwnBook}
                     className="h-auto py-4 flex flex-col items-center"
                   >
                     <span className="font-semibold">{planLabels[plan]}</span>
@@ -171,9 +220,18 @@ const BookDetail = () => {
                 </div>
               )}
 
-              <Button className="w-full h-11 text-base font-semibold" onClick={handleBooking} disabled={!book.status || book.status !== 'Available'}>
-                จองและชำระเงิน
+              <Button
+                className="w-full h-11 text-base font-semibold"
+                onClick={() => { void handleBooking(); }}
+                disabled={!book.status || book.status !== 'Available' || submitting || isOwnBook}
+              >
+                {submitting ? "กำลังทำรายการ..." : "จองและชำระเงิน"}
               </Button>
+              {isOwnBook && (
+                <p className="text-sm text-center text-muted-foreground">
+                  นี่คือหนังสือของร้านคุณเอง จึงไม่สามารถเช่าได้
+                </p>
+              )}
               <p className="text-xs text-muted-foreground text-center">* ดูหนังสือได้โดยไม่ต้อง login แต่ต้อง login ก่อนทำรายการเช่า</p>
             </div>
 

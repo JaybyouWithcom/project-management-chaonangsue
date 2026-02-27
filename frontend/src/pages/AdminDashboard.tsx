@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { mockOrders, genres } from "@/lib/mockData";
+import { genres } from "@/lib/mockData";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
@@ -31,6 +31,25 @@ interface ApiBook {
   bookCondition: string | null;
   bookPrice: string;
   status: "Available" | "Rented";
+}
+
+interface ApiRental {
+  rentalId: number;
+  bookId: number;
+  bookTitle: string;
+  bookCover: string;
+  renterName: string;
+  renterId: number;
+  startDate: string;
+  endDate: string;
+  rentalPrice: number;
+  status: "กำลังยืม" | "คืนแล้ว" | "เลยกำหนด";
+  totalPrice: number;
+  pastDueDays: number;
+  fineAmountDue: number;
+  fineAmountTotal: number;
+  finePaidAt: string | null;
+  paymentStatus: "รอชำระ" | "ชำระแล้ว" | "ยกเลิก";
 }
 
 const paymentStatusColors: Record<string, string> = {
@@ -69,10 +88,21 @@ const AdminDashboard = () => {
     },
   });
 
-  const totalRevenue = mockOrders.filter(o => o.paymentStatus === "ชำระแล้ว").reduce((s, o) => s + o.totalPrice, 0);
-  const totalPenalty = mockOrders.reduce((s, o) => s + o.penalty, 0);
-  const activeRentals = mockOrders.filter(o => !["คืนแล้ว", "ยกเลิก"].includes(o.status)).length;
-  const overdueCount = mockOrders.filter(o => o.status === "เลยกำหนด").length;
+  const { data: rentals = [] } = useQuery({
+    queryKey: ["shop-rentals", shopId],
+    queryFn: async () => {
+      if (!hasValidShopId || !token) {
+        return [] as ApiRental[];
+      }
+      const result = await apiGet<{ rentals: ApiRental[] }>(`/api/books/rentals/shop?shopId=${shopId}`, token);
+      return result.data.rentals;
+    },
+  });
+
+  const totalRevenue = rentals.filter(o => o.paymentStatus === "ชำระแล้ว").reduce((s, o) => s + o.totalPrice, 0);
+  const totalPenalty = rentals.reduce((s, o) => s + o.fineAmountTotal, 0);
+  const activeRentals = rentals.filter(o => o.status !== "คืนแล้ว").length;
+  const overdueCount = rentals.filter(o => o.status === "เลยกำหนด").length;
 
   const filteredBooks = useMemo(() => books.filter((b) =>
     b.title.toLowerCase().includes(bookSearch.toLowerCase()) ||
@@ -242,13 +272,13 @@ const AdminDashboard = () => {
               <Table>
                 <TableHeader><TableRow><TableHead>รหัสคำสั่ง</TableHead><TableHead>ผู้เช่า</TableHead><TableHead>ค่าเช่า</TableHead><TableHead>ค่าปรับ</TableHead><TableHead>รวม</TableHead><TableHead>สถานะ</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {mockOrders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-mono text-xs">{order.id}</TableCell>
+                  {rentals.map((order) => (
+                    <TableRow key={order.rentalId}>
+                      <TableCell className="font-mono text-xs">RENT-{order.rentalId}</TableCell>
                       <TableCell className="text-sm">{order.renterName}</TableCell>
                       <TableCell className="font-semibold">฿{order.totalPrice}</TableCell>
-                      <TableCell className={order.penalty > 0 ? "text-destructive font-semibold" : "text-muted-foreground"}>{order.penalty > 0 ? `฿${order.penalty}` : "—"}</TableCell>
-                      <TableCell className="font-bold">฿{order.totalPrice + order.penalty}</TableCell>
+                      <TableCell className={order.fineAmountTotal > 0 ? "text-destructive font-semibold" : "text-muted-foreground"}>{order.fineAmountTotal > 0 ? `฿${order.fineAmountTotal}` : "—"}</TableCell>
+                      <TableCell className="font-bold">฿{order.totalPrice + order.fineAmountTotal}</TableCell>
                       <TableCell><Badge className={`${paymentStatusColors[order.paymentStatus]} border-0`}>{order.paymentStatus}</Badge></TableCell>
                     </TableRow>
                   ))}

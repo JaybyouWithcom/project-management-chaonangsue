@@ -1,11 +1,14 @@
 import { Clock, Package, BookOpen, AlertTriangle, CheckCircle, Calendar } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { mockOrders } from "@/lib/mockData";
+import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
+import { getAuthToken } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 
 const statusColors: Record<string, string> = {
   "รอยืนยัน": "bg-warning/20 text-warning border-warning/30",
@@ -30,9 +33,70 @@ const getDaysRemaining = (endDate: string) => {
   return Math.ceil(diff / 86400000);
 };
 
+interface RentalOrder {
+  rentalId: number;
+  bookId: number;
+  bookTitle: string;
+  bookCover: string;
+  renterName: string;
+  renterId: number;
+  startDate: string;
+  endDate: string;
+  rentalPrice: number;
+  status: "กำลังยืม" | "คืนแล้ว" | "เลยกำหนด";
+  totalPrice: number;
+  pastDueDays: number;
+  fineAmountDue: number;
+  fineAmountTotal: number;
+  finePaidAt: string | null;
+  paymentStatus: "รอชำระ" | "ชำระแล้ว" | "ยกเลิก";
+}
+
 const CustomerDashboard = () => {
-  const activeOrders = mockOrders.filter((o) => !["คืนแล้ว"].includes(o.status));
-  const historyOrders = mockOrders.filter((o) => o.status === "คืนแล้ว");
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const token = getAuthToken();
+  const { data: orders = [] } = useQuery({
+    queryKey: ["my-rentals"],
+    enabled: Boolean(token),
+    queryFn: async () => {
+      const response = await apiGet<{ rentals: RentalOrder[] }>("/api/books/rentals/me", token ?? undefined);
+      return response.data.rentals;
+    },
+  });
+
+  const activeOrders = orders.filter((o) => !["คืนแล้ว"].includes(o.status));
+  const historyOrders = orders.filter((o) => o.status === "คืนแล้ว");
+
+  const handlePayFine = async (rentalId: number) => {
+    if (!token) {
+      return;
+    }
+
+    try {
+      const result = await apiPost<{
+        rentalId: number;
+        pastDueDays: number;
+        fineAmount: number;
+        balanceAfter: number;
+      }>(`/api/books/rentals/${rentalId}/pay-fine`, {}, token);
+
+      toast({
+        title: "ชำระค่าปรับสำเร็จ",
+        description: `ยอดค่าปรับ ฿${result.data.fineAmount} • ยอดคงเหลือ ฿${result.data.balanceAfter}`,
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["my-rentals"] }),
+        queryClient.invalidateQueries({ queryKey: ["auth-me"] }),
+      ]);
+    } catch (error) {
+      toast({
+        title: "ชำระค่าปรับไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -45,7 +109,7 @@ const CustomerDashboard = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
             { label: "กำลังเช่า", value: activeOrders.filter(o => o.status === "กำลังยืม").length, icon: BookOpen, color: "text-primary" },
-            { label: "รอยืนยัน", value: activeOrders.filter(o => o.status === "รอยืนยัน").length, icon: Clock, color: "text-warning" },
+            { label: "รายการทั้งหมด", value: orders.length, icon: Clock, color: "text-warning" },
             { label: "เลยกำหนด", value: activeOrders.filter(o => o.status === "เลยกำหนด").length, icon: AlertTriangle, color: "text-destructive" },
             { label: "คืนแล้ว", value: historyOrders.length, icon: CheckCircle, color: "text-success" },
           ].map((card) => (
@@ -70,21 +134,21 @@ const CustomerDashboard = () => {
               const Icon = statusIcons[order.status];
               const daysLeft = getDaysRemaining(order.endDate);
               return (
-                <div key={order.id} className="bg-card rounded-xl border p-4 md:p-6 flex flex-col md:flex-row gap-4">
-                  <img src={order.bookCover} alt={order.bookTitle} className="w-20 h-28 rounded-lg object-cover shrink-0" />
+                <div key={order.rentalId} className="bg-card rounded-xl border p-4 md:p-6 flex flex-col md:flex-row gap-4">
+                  <img src={resolveImageUrl(order.bookCover)} alt={order.bookTitle} className="w-20 h-28 rounded-lg object-cover shrink-0" />
                   <div className="flex-1 space-y-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <h3 className="font-display font-semibold text-lg">{order.bookTitle}</h3>
-                        <p className="text-xs text-muted-foreground">{order.id}</p>
+                        <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
                       </div>
                       <Badge className={`${statusColors[order.status]} border`}>
                         <Icon className="h-3 w-3 mr-1" /> {order.status}
                       </Badge>
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                      <span>รับ: {order.startDate}</span>
-                      <span>คืน: {order.endDate}</span>
+                      <span>รับ: {new Date(order.startDate).toLocaleDateString()}</span>
+                      <span>คืน: {new Date(order.endDate).toLocaleDateString()}</span>
                       <span className="font-semibold text-foreground">฿{order.totalPrice}</span>
                     </div>
                     {order.status === "กำลังยืม" && (
@@ -100,8 +164,19 @@ const CustomerDashboard = () => {
                     )}
                     {order.status === "เลยกำหนด" && (
                       <div className="bg-destructive/10 rounded-lg p-3 text-sm">
-                        <span className="text-destructive font-semibold">ค่าปรับ: ฿{order.penalty}</span>
-                        <span className="text-muted-foreground ml-2">(เลยกำหนด {Math.abs(daysLeft)} วัน)</span>
+                        <span className="text-destructive font-semibold">ค่าปรับ: ฿{order.fineAmountDue}</span>
+                        <span className="text-muted-foreground ml-2">(เลยกำหนด {order.pastDueDays} วัน)</span>
+                        {order.finePaidAt ? (
+                          <span className="ml-2 text-success">ชำระแล้ว</span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            className="ml-3"
+                            onClick={() => { void handlePayFine(order.rentalId); }}
+                          >
+                            ชำระค่าปรับ
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -112,18 +187,18 @@ const CustomerDashboard = () => {
 
           <TabsContent value="history" className="space-y-4">
             {historyOrders.map((order) => (
-              <div key={order.id} className="bg-card rounded-xl border p-4 md:p-6 flex flex-col md:flex-row gap-4 opacity-80">
-                <img src={order.bookCover} alt={order.bookTitle} className="w-20 h-28 rounded-lg object-cover shrink-0" />
+              <div key={order.rentalId} className="bg-card rounded-xl border p-4 md:p-6 flex flex-col md:flex-row gap-4 opacity-80">
+                <img src={resolveImageUrl(order.bookCover)} alt={order.bookTitle} className="w-20 h-28 rounded-lg object-cover shrink-0" />
                 <div className="flex-1">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <h3 className="font-display font-semibold">{order.bookTitle}</h3>
-                      <p className="text-xs text-muted-foreground">{order.id}</p>
+                      <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
                     </div>
                     <Badge variant="secondary"><CheckCircle className="h-3 w-3 mr-1" /> คืนแล้ว</Badge>
                   </div>
                   <div className="flex gap-4 text-sm text-muted-foreground mt-2">
-                    <span>{order.startDate} — {order.endDate}</span>
+                    <span>{new Date(order.startDate).toLocaleDateString()} — {new Date(order.endDate).toLocaleDateString()}</span>
                     <span>฿{order.totalPrice}</span>
                   </div>
                   <Button variant="outline" size="sm" className="mt-3">เช่าอีกครั้ง</Button>

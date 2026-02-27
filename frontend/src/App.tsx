@@ -11,6 +11,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import StoreMenu from "./pages/StoreMenu";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/Auth";
+import Settings from "./pages/Settings";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/admin" element={<StoreMenu />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

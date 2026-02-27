@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 
 import type { AuthService } from '../../application/services/AuthService.js';
 import { AppError } from '../../shared/errors/AppError.js';
+import { sendSuccess } from '../../shared/http/response.js';
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
@@ -36,7 +37,7 @@ export class AuthController {
       password,
     });
 
-    res.status(201).json(result);
+    sendSuccess(res, result, 201);
   };
 
   login = async (req: Request, res: Response): Promise<void> => {
@@ -47,7 +48,7 @@ export class AuthController {
     }
 
     const result = await this.authService.login({ login, password });
-    res.status(200).json(result);
+    sendSuccess(res, result);
   };
 
   me = async (req: Request, res: Response): Promise<void> => {
@@ -56,6 +57,6 @@ export class AuthController {
     }
 
     const user = await this.authService.me(req.auth.userId);
-    res.status(200).json({ user });
+    sendSuccess(res, { user });
   };
 }

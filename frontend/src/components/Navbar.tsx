@@ -1,11 +1,18 @@
-import { Link, useLocation } from "react-router-dom";
-import { BookOpen, Search, User, LayoutDashboard, Menu, X, Settings, Wallet, Store } from "lucide-react";
-import { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { BookOpen, Search, User, Menu, X, Settings, Wallet, Store, LogIn, LogOut } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { clearAuthToken, getAuthToken } from "@/lib/auth";
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [loggedIn, setLoggedIn] = useState<boolean>(Boolean(getAuthToken()));
+
+  useEffect(() => {
+    setLoggedIn(Boolean(getAuthToken()));
+  }, [location.pathname]);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -22,19 +29,14 @@ const Navbar = () => {
   return (
     <nav className="sticky top-0 z-50 glass-card border-b">
       <div className="container mx-auto px-4 h-16 flex items-center">
-        
-        {/* ฝั่งซ้าย: Logo (ให้พื้นที่ flex-1 เพื่อดันส่วนกลางให้อยู่ตรงกลาง) */}
         <div className="flex-1 flex justify-start">
           <Link to="/" className="flex items-center gap-2">
             <BookOpen className="h-7 w-7 text-primary" />
-            <span className="font-display text-xl font-bold text-primary">
-              ChaoNangsue
-            </span>
+            <span className="font-display text-xl font-bold text-primary">ChaoNangsue</span>
             <span className="text-xs text-accent font-semibold">.com</span>
           </Link>
         </div>
 
-        {/* ตรงกลาง: Desktop nav */}
         <div className="hidden md:flex flex-none items-center gap-1">
           {navLinks.map((link) => (
             <Link
@@ -52,16 +54,31 @@ const Navbar = () => {
           ))}
         </div>
 
-        {/* ฝั่งขวา: Balance & Mobile Toggle (ให้พื้นที่ flex-1 เพื่อสมดุลกับฝั่งซ้าย) */}
-        <div className="flex-1 flex justify-end items-center gap-4">
-          {/* Desktop Balance */}
+        <div className="flex-1 flex justify-end items-center gap-3">
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-secondary/50 border rounded-full text-sm">
             <Wallet className="h-4 w-4 text-primary" />
             <span className="font-medium text-muted-foreground">ยอดเงินคงเหลือ:</span>
             <span className="font-bold text-primary">฿{balance}</span>
           </div>
 
-          {/* Mobile toggle */}
+          {loggedIn ? (
+            <Button
+              variant="outline"
+              className="hidden md:inline-flex"
+              onClick={() => {
+                clearAuthToken();
+                setLoggedIn(false);
+                navigate('/');
+              }}
+            >
+              <LogOut className="h-4 w-4 mr-1" /> ออกจากระบบ
+            </Button>
+          ) : (
+            <Button asChild className="hidden md:inline-flex">
+              <Link to="/auth"><LogIn className="h-4 w-4 mr-1" /> เข้าสู่ระบบ</Link>
+            </Button>
+          )}
+
           <Button
             variant="ghost"
             size="icon"
@@ -71,10 +88,8 @@ const Navbar = () => {
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
         </div>
-
       </div>
 
-      {/* Mobile nav (ยังคงรูปแบบเดิม) */}
       {mobileOpen && (
         <div className="md:hidden border-t bg-card px-4 pb-4 pt-2 space-y-3">
           <div className="flex items-center justify-between px-3 py-3 bg-secondary/30 rounded-lg text-sm border">
@@ -101,6 +116,27 @@ const Navbar = () => {
                 {link.label}
               </Link>
             ))}
+            {loggedIn ? (
+              <button
+                className="w-full text-left flex items-center gap-2 px-3 py-3 rounded-lg text-sm font-medium text-foreground/70 hover:bg-muted"
+                onClick={() => {
+                  clearAuthToken();
+                  setLoggedIn(false);
+                  setMobileOpen(false);
+                  navigate('/');
+                }}
+              >
+                <LogOut className="h-4 w-4" /> ออกจากระบบ
+              </button>
+            ) : (
+              <Link
+                to="/auth"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-2 px-3 py-3 rounded-lg text-sm font-medium text-foreground/70 hover:bg-muted"
+              >
+                <LogIn className="h-4 w-4" /> เข้าสู่ระบบ
+              </Link>
+            )}
           </div>
         </div>
       )}

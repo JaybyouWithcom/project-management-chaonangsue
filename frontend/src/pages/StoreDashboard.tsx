@@ -17,9 +17,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-<<<<<<< HEAD:frontend/src/pages/AdminDashboard.tsx
-import { genres } from "@/lib/mockData";
-=======
 import { mockOrders, genres } from "@/lib/mockData";
 import { conditionOptions, normalizeConditionLabel } from "@/lib/bookCondition";
 import { useToast } from "@/hooks/use-toast";

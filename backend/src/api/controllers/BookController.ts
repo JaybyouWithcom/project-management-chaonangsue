@@ -97,6 +97,53 @@ export class BookController {
     sendSuccess(res, { book: result }, 201);
   };
 
+  update = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const bookId = Number(req.params.bookId);
+    if (!Number.isInteger(bookId)) {
+      throw new AppError('Invalid bookId', 400);
+    }
+
+    const {
+      title,
+      author,
+      isbn,
+      genre,
+      bookCondition,
+      description,
+      bookPrice,
+      imageBase64,
+    } = req.body as Record<string, unknown>;
+
+    const parsedBookPrice = parseNumber(bookPrice);
+    if (bookPrice !== undefined && parsedBookPrice === undefined) {
+      throw new AppError('bookPrice must be a number', 400);
+    }
+
+    let imagePath: string | undefined;
+    if (isNonEmptyString(imageBase64)) {
+      imagePath = await saveImageFromDataUrl(imageBase64);
+    }
+
+    const updated = await this.bookService.update({
+      ownerId: req.auth.userId,
+      bookId,
+      title: isNonEmptyString(title) ? title : undefined,
+      author: isNonEmptyString(author) ? author : undefined,
+      isbn: typeof isbn === 'string' ? isbn : undefined,
+      genre: typeof genre === 'string' ? genre : undefined,
+      bookCondition: isNonEmptyString(bookCondition) ? (bookCondition as '1' | '2' | '3' | '4' | '5') : undefined,
+      description: typeof description === 'string' ? description : undefined,
+      bookPrice: parsedBookPrice,
+      imagePath,
+    });
+
+    sendSuccess(res, { book: updated });
+  };
+
   list = async (req: Request, res: Response): Promise<void> => {
     const page = Math.max(1, Number(req.query.page ?? 1));
     const limit = Math.min(50, Math.max(1, Number(req.query.limit ?? 10)));
@@ -170,6 +217,20 @@ export class BookController {
     });
 
     sendSuccess(res, result, 201);
+  };
+
+  delete = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const bookId = Number(req.params.bookId);
+    if (!Number.isInteger(bookId)) {
+      throw new AppError('Invalid bookId', 400);
+    }
+
+    await this.bookService.delete({ ownerId: req.auth.userId, bookId });
+    sendSuccess(res, { deleted: true });
   };
 
   listMyRentals = async (req: Request, res: Response): Promise<void> => {

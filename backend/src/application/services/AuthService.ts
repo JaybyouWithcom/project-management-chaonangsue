@@ -30,6 +30,7 @@ interface UpdateProfileInput {
   userId: number;
   firstname: string;
   lastname: string;
+  email: string;
   phoneNumber?: string;
 }
 
@@ -46,11 +47,11 @@ export class AuthService {
     const phoneNumber = input.phoneNumber?.trim() ? input.phoneNumber.trim() : undefined;
 
     if (!emailRegex.test(email)) {
-      throw new AppError('Invalid email format', 400);
+      throw new AppError('กรุณากรอกอีเมลในรูปแบบที่ถูกต้อง เช่น user@example.com', 400);
     }
 
     if (phoneNumber && !phoneRegex.test(phoneNumber)) {
-      throw new AppError('Phone number must be numeric with 9-10 digits', 400);
+      throw new AppError('เบอร์โทรศัพท์ต้องเป็นตัวเลข 9-10 หลักเท่านั้น', 400);
     }
 
     await this.assertUniqueness({ ...input, email, phoneNumber });
@@ -68,7 +69,7 @@ export class AuthService {
       });
     } catch (error) {
       if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ER_DUP_ENTRY') {
-        throw new AppError('Email or username is already in use', 409);
+        throw new AppError('อีเมล หรือ Username นี้ถูกใช้งานแล้ว', 409);
       }
       throw error;
     }
@@ -84,17 +85,17 @@ export class AuthService {
     const user = userByEmail ?? (await this.userRepository.findByUsername(input.login));
 
     if (!user) {
-      throw new AppError('Invalid credentials', 401);
+      throw new AppError('ชื่อผู้ใช้/รหัสผ่านไม่ถูกต้อง', 401);
     }
 
     const passwordMatched = await bcrypt.compare(input.password, user.password);
 
     if (!passwordMatched) {
-      throw new AppError('Invalid credentials', 401);
+      throw new AppError('ชื่อผู้ใช้/รหัสผ่านไม่ถูกต้อง', 401);
     }
 
     if (user.role === 'Banned') {
-      throw new AppError('This account is banned', 403);
+      throw new AppError('บัญชีผู้ใช้นี้ถูกระงับการใช้งาน', 403);
     }
 
     return {
@@ -107,25 +108,39 @@ export class AuthService {
     const user = await this.userRepository.findById(userId);
 
     if (!user) {
-      throw new AppError('User not found', 404);
+      throw new AppError('ไม่พบบัญชีผู้ใช้', 404);
     }
 
     return toPublicUser(user);
   }
 
   async updateProfile(input: UpdateProfileInput): Promise<PublicUser> {
-    if (!input.firstname.trim() || !input.lastname.trim()) {
-      throw new AppError('Missing required fields', 400);
+    // 2. ตรวจสอบค่าว่างและรูปแบบอีเมล
+    const email = input.email.trim().toLowerCase();
+    if (!input.firstname.trim() || !input.lastname.trim() || !email) {
+      throw new AppError('ข้อมูลไม่ครบถ้วน', 400);
+    }
+
+    if (!emailRegex.test(email)) {
+      throw new AppError('อีเมลไม่ถูกต้อง', 400);
+    }
+
+    // 3. ตรวจสอบว่าอีเมลใหม่ซ้ำกับคนอื่นในระบบหรือไม่
+    const existingUser = await this.userRepository.findByEmail(email);
+    if (existingUser && existingUser.userId !== input.userId) {
+      throw new AppError('อีเมลนี้ถูกใช้งานแล้วในบัญชีอื่น', 409);
     }
 
     const phoneNumber = input.phoneNumber?.trim() ? input.phoneNumber.trim() : null;
     if (phoneNumber && !phoneRegex.test(phoneNumber)) {
-      throw new AppError('Phone number must be numeric with 9-10 digits', 400);
+      throw new AppError('เบอร์โทรศัพท์ต้องเป็นตัวเลข 9-10 หลักเท่านั้น', 400);
     }
 
+    // 4. ส่ง email ไปยัง repository เพื่ออัปเดตลงฐานข้อมูล
     const updated = await this.userRepository.updateProfileById(input.userId, {
       firstname: input.firstname.trim(),
       lastname: input.lastname.trim(),
+      email, // บันทึกอีเมลใหม่
       phoneNumber,
     });
 
@@ -137,7 +152,7 @@ export class AuthService {
       const payload = jwt.verify(token, env.auth.jwtSecret) as AuthJwtPayload;
       return payload;
     } catch {
-      throw new AppError('Invalid or expired token', 401);
+      throw new AppError('Token ไม่ถูกต้องหรือหมดอายุแล้ว', 401);
     }
   }
 
@@ -153,12 +168,12 @@ export class AuthService {
   private async assertUniqueness(input: RegisterInput): Promise<void> {
     const existingByEmail = await this.userRepository.findByEmail(input.email);
     if (existingByEmail) {
-      throw new AppError('Email is already in use', 409);
+      throw new AppError('อีเมลนี้ถูกใช้งานแล้ว', 409);
     }
 
     const existingByUsername = await this.userRepository.findByUsername(input.username);
     if (existingByUsername) {
-      throw new AppError('Username is already in use', 409);
+      throw new AppError('Username นี้ถูกใช้งานแล้ว', 409);
     }
 
   }

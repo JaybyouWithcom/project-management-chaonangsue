@@ -5,7 +5,7 @@ export interface Book {
   isbn: string;
   genre: string;
   cover: string;
-  condition: "ใหม่มาก" | "ดีมาก" | "ดี" | "พอใช้" | "แย่";
+  condition: "ใหม่เอี่ยม ✨" | "ดีมาก" | "ดี" | "พอใช้" | "แย่";
   minRentalPrice: number; // เปลี่ยนจาก pricePerDay เป็น minRentalPrice (ค่าเช่าขั้นต่ำ 15 วัน)
   deposit: number;
   description: string;
@@ -33,13 +33,13 @@ export const genres = [
   "ประวัติศาสตร์", "การ์ตูน", "พัฒนาตัวเอง", "ท่องเที่ยว", "ศิลปะ"
 ];
 
-export const conditions = ["ใหม่มาก", "ดีมาก", "ดี", "พอใช้", "แย่"];
+export const conditions = ["ใหม่เอี่ยม ✨", "ดีมาก", "ดี", "พอใช้", "แย่"];
 
 export const mockBooks: Book[] = [
   {
     id: "1", title: "เพราะเราคู่กัน", author: "JittiRain", isbn: "978-616-xxx-001",
     genre: "นิยาย", cover: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=300&h=400&fit=crop",
-    condition: "ใหม่มาก", minRentalPrice: 90, deposit: 150, description: "นิยายรักโรแมนติกขายดีอันดับ 1", // (150 * 2) * 0.3 = 90
+    condition: "ใหม่เอี่ยม ✨", minRentalPrice: 90, deposit: 150, description: "นิยายรักโรแมนติกขายดีอันดับ 1", // (150 * 2) * 0.3 = 90
     available: true, rating: 4.8, totalRentals: 128
   },
   {
@@ -63,7 +63,7 @@ export const mockBooks: Book[] = [
   {
     id: "5", title: "เมื่อวานนี้ ฉันได้ตาย", author: "พศิน อินทรวงค์", isbn: "978-616-xxx-005",
     genre: "จิตวิทยา", cover: "https://images.unsplash.com/photo-1589998059171-988d887df646?w=300&h=400&fit=crop",
-    condition: "ใหม่มาก", minRentalPrice: 36, deposit: 60, description: "การเดินทางค้นหาตัวเองผ่านประสบการณ์ใกล้ตาย", // (60 * 2) * 0.3 = 36
+    condition: "ใหม่เอี่ยม ✨", minRentalPrice: 36, deposit: 60, description: "การเดินทางค้นหาตัวเองผ่านประสบการณ์ใกล้ตาย", // (60 * 2) * 0.3 = 36
     available: true, rating: 4.6, totalRentals: 145
   },
   {

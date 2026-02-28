@@ -13,7 +13,7 @@ import { type ApiBook, toUiBook } from "@/lib/books";
 const steps = [
   { icon: Search, title: "ค้นหาหนังสือ", desc: "เลือกหนังสือที่ชอบจากคลังกว่า 1,000 เล่ม" },
   { icon: BookOpen, title: "เลือกแผนการเช่า", desc: "15 วัน หรือ 30 วัน ตามความสะดวก" },
-  { icon: CreditCard, title: "ชำระเงินง่ายๆ", desc: "QR PromptPay, บัตรเครดิต หรือ e-Wallet" },
+  { icon: CreditCard, title: "ชำระเงินง่ายๆ", desc: "เติมเงินเข้าวอลเล็ตของเราได้ง่าย ๆ" },
   { icon: Truck, title: "รับหนังสือถึงมือ", desc: "จัดส่งถึงบ้าน พร้อมติดตามสถานะ" },
 ];
 
@@ -28,8 +28,15 @@ const Index = () => {
   const { data: featuredBooks = [], isLoading, isError } = useQuery({
     queryKey: ["featured-books"],
     queryFn: async () => {
-      const response = await apiGet<{ books: ApiBook[] }>("/api/books?limit=4");
-      return response.data.books.map(toUiBook);
+      // ดึงข้อมูลมาเผื่อไว้กรองเรตติ้ง (ใช้ logic เดียวกับที่เคยอยู่ใน BrowseBooks)
+      const response = await apiGet<{ books: ApiBook[] }>("/api/books?limit=50");
+      const books = response.data.books.map(toUiBook);
+      
+      // กรองเรตติ้ง >= 4.5 เรียงคะแนนจากมากไปน้อย และดึงมาแค่ 4 เล่ม
+      return books
+        .filter((book) => book.rating >= 4.5)
+        .sort((a, b) => b.rating - a.rating)
+        .slice(0, 4);
     },
   });
 
@@ -67,11 +74,37 @@ const Index = () => {
         </div>
       </section>
 
+      {/* Featured Books (จากคะแนนรีวิว) */}
+      <section className="py-16 bg-muted/50">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="font-display text-3xl font-bold flex items-center gap-3">
+              <Star className="h-7 w-7 text-accent fill-current" /> 
+              หนังสือแนะนำ
+            </h2>
+            <Button asChild variant="ghost" className="text-primary font-semibold">
+              <Link to="/browse">ดูทั้งหมด <ArrowRight className="ml-1 h-4 w-4" /></Link>
+            </Button>
+          </div>
+          {isLoading ? (
+            <p className="text-muted-foreground">กำลังโหลดหนังสือแนะนำ...</p>
+          ) : isError ? (
+            <p className="text-destructive">โหลดข้อมูลหนังสือแนะนำไม่สำเร็จ</p>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+              {featuredBooks.map((book) => (
+                <BookCard key={book.id} book={book} />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* How it works */}
-      <section className="py-16 md:py-24">
+      <section className="bg-card border-b py-16 md:py-24">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground">ขั้นตอนง่ายๆ</h2>
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground">ขั้นตอนง่าย ๆ</h2>
             <p className="text-muted-foreground mt-3">เช่าหนังสือได้ใน 4 ขั้นตอน</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -91,32 +124,12 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Featured Books */}
-      <section className="py-16 bg-muted/50">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="font-display text-3xl font-bold">หนังสือแนะนำ</h2>
-            <Button asChild variant="ghost" className="text-primary font-semibold">
-              <Link to="/browse">ดูทั้งหมด <ArrowRight className="ml-1 h-4 w-4" /></Link>
-            </Button>
-          </div>
-          {isLoading ? (
-            <p className="text-muted-foreground">กำลังโหลดหนังสือแนะนำ...</p>
-          ) : isError ? (
-            <p className="text-destructive">โหลดข้อมูลหนังสือแนะนำไม่สำเร็จ</p>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-              {featuredBooks.map((book) => (
-                <BookCard key={book.id} book={book} />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
       {/* USP */}
-      <section className="py-16 md:py-24">
+      <section className="py-16 md:py-24 bg-muted/50">
         <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground">ทำไมต้องเช่ากับเรา ?</h2>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               { icon: Shield, title: "ปลอดภัย มั่นใจ", desc: "ระบบ E-KYC ยืนยันตัวตน ถ่ายรูปสภาพหนังสือก่อน-หลัง ป้องกันข้อพิพาท" },

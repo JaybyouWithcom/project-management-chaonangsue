@@ -17,6 +17,8 @@ type Plan = "15days" | "30days";
 interface BookDetailData {
   bookId: number;
   ownerId: number;
+  shopId: number | null;
+  shopName: string | null;
   imagePath: string;
   title: string;
   genre: string | null;
@@ -40,6 +42,21 @@ interface QuoteData {
 const planLabels: Record<Plan, string> = {
   "15days": "15 วัน",
   "30days": "30 วัน",
+};
+
+// เพิ่มฟังก์ชันสำหรับแปลงรูปแบบวันที่เป็นแบบไทย
+const formatThaiDate = (dateString: string) => {
+  if (!dateString) return "-";
+  try {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat("th-TH", {
+      day: "numeric",
+      month: "short",
+      year: "2-digit",
+    }).format(date);
+  } catch (error) {
+    return dateString; // ถ้าแปลงไม่สำเร็จให้คืนค่าเดิมกลับไป
+  }
 };
 
 const BookDetail = () => {
@@ -177,7 +194,16 @@ const BookDetail = () => {
                 <Badge className="bg-accent text-accent-foreground border-0">{normalizeConditionLabel(book.bookCondition)}</Badge>
               </div>
               <h1 className="font-display text-3xl md:text-4xl font-bold">{book.title}</h1>
-              <p className="text-muted-foreground mt-1">โดย {book.author} • เจ้าของร้าน {book.ownerName}</p>
+              <p className="text-muted-foreground mt-1">
+                ผู้เขียน {book.author} • ร้าน{" "}
+                {book.shopId && book.shopName ? (
+                  <Link to={`/shop/${book.shopId}`} className="underline underline-offset-2 hover:text-primary">
+                    {book.shopName}
+                  </Link>
+                ) : (
+                  book.ownerName
+                )}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">ISBN: {book.isbn ?? '-'}</p>
             </div>
 
@@ -197,7 +223,7 @@ const BookDetail = () => {
                 <p className="text-sm text-muted-foreground">ราคาหนังสือ: ฿{book.bookPrice}</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {(["15days", "30days"] as Plan[]).map((plan) => (
                   <Button
                     key={plan}
@@ -216,7 +242,7 @@ const BookDetail = () => {
                 <div className="space-y-2 border-t pt-4 text-sm">
                   <div className="flex justify-between"><span className="text-muted-foreground">ค่าเช่า ({planLabels[selectedPlan]})</span><span>฿{quoteQuery.data.rentalPrice}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">ค่ามัดจำ</span><span>฿{quoteQuery.data.depositPrice}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">กำหนดคืน</span><span>{quoteQuery.data.dueDate}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">กำหนดคืน</span><span>{formatThaiDate(quoteQuery.data.dueDate)}</span></div>
                   <div className="flex justify-between text-base font-bold border-t pt-2"><span>รวมที่ต้องชำระ</span><span className="text-primary">฿{quoteQuery.data.totalAmount}</span></div>
                 </div>
               )}

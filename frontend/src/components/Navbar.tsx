@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
 import { apiGet } from "@/lib/api";
 
+import myLogo from "@/assets/logo.png";
+
 interface AuthUser {
   userId: number;
   balance: string;
@@ -51,23 +53,31 @@ const Navbar = () => {
     { to: "/", label: "หน้าแรก", icon: BookOpen },
     { to: "/browse", label: "ค้นหาหนังสือ", icon: Search },
     { to: "/dashboard", label: "แดชบอร์ดของฉัน", icon: User },
-    { to: "/admin", label: "ร้านของฉัน", icon: Store },
+    { to: "/store", label: "ร้านของฉัน", icon: Store },
     { to: "/settings", label: "การตั้งค่า", icon: Settings },
   ];
+  const navLinksToHideWhenLoggedOut = new Set(["/dashboard", "/store", "/settings"]);
+  const visibleNavLinks = loggedIn
+    ? navLinks
+    : navLinks.filter((link) => !navLinksToHideWhenLoggedOut.has(link.to));
 
   return (
     <nav className="sticky top-0 z-50 glass-card border-b">
       <div className="container mx-auto px-4 h-16 flex items-center">
         <div className="flex-1 flex justify-start">
           <Link to="/" className="flex items-center gap-2">
-            <BookOpen className="h-7 w-7 text-primary" />
+            <img 
+              src={myLogo} 
+              alt="ChaoNangsue Logo" 
+              className="h-11 w-11 object-contain"
+            />
             <span className="font-display text-xl font-bold text-primary">ChaoNangsue</span>
             <span className="text-xs text-accent font-semibold">.com</span>
           </Link>
         </div>
 
         <div className="hidden md:flex flex-none items-center gap-1">
-          {navLinks.map((link) => (
+          {visibleNavLinks.map((link) => (
             <Link
               key={link.to}
               to={link.to}
@@ -84,11 +94,14 @@ const Navbar = () => {
         </div>
 
         <div className="flex-1 flex justify-end items-center gap-3">
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-secondary/50 border rounded-full text-sm">
-            <Wallet className="h-4 w-4 text-primary" />
-            <span className="font-medium text-muted-foreground">ยอดเงินคงเหลือ:</span>
-            <span className="font-bold text-primary">{balanceLabel}</span>
-          </div>
+          {/* ซ่อนยอดเงินคงเหลือในจอใหญ่เมื่อยังไม่ล็อกอิน */}
+          {loggedIn && (
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-secondary/50 border rounded-full text-sm">
+              <Wallet className="h-4 w-4 text-primary" />
+              <span className="font-medium text-muted-foreground">ยอดเงินคงเหลือ:</span>
+              <span className="font-bold text-primary">{balanceLabel}</span>
+            </div>
+          )}
 
           {loggedIn ? (
             <Button
@@ -121,16 +134,19 @@ const Navbar = () => {
 
       {mobileOpen && (
         <div className="md:hidden border-t bg-card px-4 pb-4 pt-2 space-y-3">
-          <div className="flex items-center justify-between px-3 py-3 bg-secondary/30 rounded-lg text-sm border">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Wallet className="h-4 w-4 text-primary" />
-              <span className="font-medium">ยอดเงินคงเหลือ</span>
+          {/* ซ่อนยอดเงินคงเหลือในจอมือถือเมื่อยังไม่ล็อกอิน */}
+          {loggedIn && (
+            <div className="flex items-center justify-between px-3 py-3 bg-secondary/30 rounded-lg text-sm border">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Wallet className="h-4 w-4 text-primary" />
+                <span className="font-medium">ยอดเงินคงเหลือ</span>
+              </div>
+              <span className="font-bold text-primary">{balanceLabel}</span>
             </div>
-            <span className="font-bold text-primary">{balanceLabel}</span>
-          </div>
+          )}
 
           <div className="space-y-1">
-            {navLinks.map((link) => (
+            {visibleNavLinks.map((link) => (
               <Link
                 key={link.to}
                 to={link.to}

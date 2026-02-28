@@ -86,6 +86,24 @@ export async function apiPatch<T>(path: string, body: unknown, token?: string): 
   return payload as ApiSuccess<T>;
 }
 
+export async function apiDelete<T>(path: string, token?: string): Promise<ApiSuccess<T>> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  const payload = await parseJson(response);
+
+  if (!response.ok || !payload.success) {
+    throw new HttpError(payload.success ? 'Request failed' : payload.error.message, response.status);
+  }
+
+  return payload as ApiSuccess<T>;
+}
+
 export const resolveImageUrl = (imagePath: string): string => {
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
     return imagePath;

@@ -19,6 +19,19 @@ interface CreateBookInput {
   bookPrice: number;
 }
 
+interface UpdateBookInput {
+  ownerId: number;
+  bookId: number;
+  title?: string;
+  imagePath?: string;
+  author?: string;
+  isbn?: string;
+  genre?: string;
+  bookCondition?: '1' | '2' | '3' | '4' | '5';
+  description?: string;
+  bookPrice?: number;
+}
+
 interface SearchBooksInput {
   shopId?: number;
   q?: string;
@@ -148,6 +161,63 @@ export class BookService {
     }
 
     return book;
+  }
+
+  async update(input: UpdateBookInput): Promise<Book> {
+    const book = await this.bookRepository.findById(input.bookId);
+    if (!book) {
+      throw new AppError('ไม่พบหนังสือที่ต้องการ', 404);
+    }
+    if (book.ownerId !== input.ownerId) {
+      throw new AppError('Unauthorized', 403);
+    }
+
+    const nextTitle = input.title !== undefined ? input.title.trim() : book.title;
+    if (!nextTitle) {
+      throw new AppError('กรุณาระบุชื่อหนังสือ', 400);
+    }
+    if (book.shopId && nextTitle !== book.title && await this.bookRepository.existsByShopAndTitle(book.shopId, nextTitle)) {
+      throw new AppError('หนังสือชื่อนี้มีอยู่ในร้านแล้ว', 409);
+    }
+
+    const nextAuthor = input.author !== undefined ? input.author.trim() : book.author;
+    if (!nextAuthor) {
+      throw new AppError('กรุณาระบุผู้เขียน', 400);
+    }
+
+    const nextPrice = input.bookPrice !== undefined ? input.bookPrice : Number(book.bookPrice);
+    if (!Number.isFinite(nextPrice)) {
+      throw new AppError('bookPrice must be a number', 400);
+    }
+
+    const nextIsbn = input.isbn !== undefined ? (input.isbn.trim() || null) : book.isbn;
+    const nextGenre = input.genre !== undefined ? (input.genre.trim() || null) : book.genre;
+    const nextCondition = input.bookCondition !== undefined ? input.bookCondition : book.bookCondition;
+    const nextDescription = input.description !== undefined ? (input.description.trim() || null) : book.description;
+    const nextImagePath = input.imagePath ?? book.imagePath;
+
+    return this.bookRepository.updateById(input.bookId, {
+      title: nextTitle,
+      imagePath: nextImagePath,
+      author: nextAuthor,
+      isbn: nextIsbn,
+      genre: nextGenre,
+      bookCondition: nextCondition,
+      description: nextDescription,
+      bookPrice: nextPrice,
+    });
+  }
+
+  async delete(input: { ownerId: number; bookId: number }): Promise<void> {
+    const book = await this.bookRepository.findById(input.bookId);
+    if (!book) {
+      throw new AppError('ไม่พบหนังสือที่ต้องการ', 404);
+    }
+    if (book.ownerId !== input.ownerId) {
+      throw new AppError('Unauthorized', 403);
+    }
+
+    await this.bookRepository.deleteById(input.bookId);
   }
 
   async getBorrowQuote(bookId: number, plan: RentalPlan): Promise<{

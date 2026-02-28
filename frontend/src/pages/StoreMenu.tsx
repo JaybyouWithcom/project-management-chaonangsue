@@ -56,7 +56,7 @@ const StoreMenu = () => {
       navigate("/auth");
       return;
     }
-    if (!name.trim() || !description.trim() || !imageFile) {
+    if (!name.trim() || !imageFile) {
       return;
     }
 
@@ -79,7 +79,7 @@ const StoreMenu = () => {
         "/api/shops",
         {
           shopName: name.trim(),
-          description: description.trim(),
+          description: description.trim() ? description.trim() : null,
           imageBase64,
         },
         token,
@@ -103,11 +103,10 @@ const StoreMenu = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 p-6 md:p-10">
-        <div className="mx-auto max-w-6xl">
-          <h1 className="mb-8 text-3xl font-bold">เมนูร้านของฉัน</h1>
+        <div className="container mx-auto px-4 py-8 flex-1">
+          <h1 className="font-display text-3xl md:text-4xl font-bold mb-6">ร้านของฉัน</h1>
 
           {!token && (
             <p className="mb-4 text-sm text-destructive">
@@ -147,10 +146,10 @@ const StoreMenu = () => {
                   </div>
                   <div>
                     <Label htmlFor="shop-desc">รายละเอียดร้าน</Label>
-                    <Textarea id="shop-desc" value={description} onChange={(event) => setDescription(event.target.value)} required rows={4} />
+                    <Textarea id="shop-desc" value={description} onChange={(event) => setDescription(event.target.value)} rows={4} />
                   </div>
                   <div>
-                    <Label htmlFor="shop-image">รูปร้าน</Label>
+                    <Label htmlFor="shop-image">แบนเนอร์ร้าน</Label>
                     <Input
                       id="shop-image"
                       type="file"
@@ -172,7 +171,7 @@ const StoreMenu = () => {
               <Card
                 key={shop.shopId}
                 className="h-64 cursor-pointer overflow-hidden hover:shadow-lg transition-shadow"
-                onClick={() => navigate(`/admin/dashboard?shopId=${shop.shopId}`)}
+                onClick={() => navigate(`/store/dashboard?shopId=${shop.shopId}`)}
                 role="button"
               >
                 <img
@@ -193,7 +192,6 @@ const StoreMenu = () => {
             ))}
           </div>
         </div>
-      </main>
       <Footer />
     </div>
   );

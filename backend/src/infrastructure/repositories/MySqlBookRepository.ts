@@ -8,6 +8,7 @@ interface BookRow extends RowDataPacket {
   book_id: number;
   owner_id: number;
   shop_id: number | null;
+  shop_name: string | null;
   title: string;
   image_path: string;
   author: string;
@@ -22,7 +23,7 @@ interface BookRow extends RowDataPacket {
 }
 
 const baseSelect = `
-  SELECT b.*, u.username AS owner_name
+  SELECT b.*, u.username AS owner_name, s.shop_name
   FROM books b
   JOIN users u ON u.user_id = b.owner_id
   LEFT JOIN shops s ON s.shop_id = b.shop_id
@@ -32,6 +33,7 @@ const mapBook = (row: BookRow): Book => ({
   bookId: row.book_id,
   ownerId: row.owner_id,
   shopId: row.shop_id,
+  shopName: row.shop_name,
   title: row.title,
   imagePath: row.image_path,
   author: row.author,
@@ -137,5 +139,46 @@ export class MySqlBookRepository implements BookRepository {
     );
 
     return rows.length > 0;
+  }
+
+  async updateById(bookId: number, input: {
+    title: string;
+    imagePath: string;
+    author: string;
+    isbn: string | null;
+    genre: string | null;
+    bookCondition: '1' | '2' | '3' | '4' | '5' | null;
+    description: string | null;
+    bookPrice: number;
+  }): Promise<Book> {
+    await dbPool.query(
+      `
+      UPDATE books
+      SET title = ?, image_path = ?, author = ?, isbn = ?, genre = ?, book_condition = ?, description = ?, book_price = ?
+      WHERE book_id = ?
+      `,
+      [
+        input.title,
+        input.imagePath,
+        input.author,
+        input.isbn,
+        input.genre,
+        input.bookCondition,
+        input.description,
+        input.bookPrice,
+        bookId,
+      ],
+    );
+
+    const updated = await this.findById(bookId);
+    if (!updated) {
+      throw new Error('Failed to load updated book');
+    }
+
+    return updated;
+  }
+
+  async deleteById(bookId: number): Promise<void> {
+    await dbPool.query('DELETE FROM books WHERE book_id = ?', [bookId]);
   }
 }

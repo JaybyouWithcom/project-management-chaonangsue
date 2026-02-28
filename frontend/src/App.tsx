@@ -9,6 +9,7 @@ import BookDetail from "./pages/BookDetail";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import StoreDashboard from "./pages/StoreDashboard";
 import StoreMenu from "./pages/StoreMenu";
+import ShopPage from "./pages/ShopPage";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/Auth";
 import Settings from "./pages/Settings";
@@ -25,9 +26,10 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/browse" element={<BrowseBooks />} />
           <Route path="/book/:id" element={<BookDetail />} />
+          <Route path="/shop/:shopId" element={<ShopPage />} />
           <Route path="/dashboard" element={<CustomerDashboard />} />
-          <Route path="/admin" element={<StoreMenu />} />
-          <Route path="/admin/dashboard" element={<StoreDashboard />} />
+          <Route path="/store" element={<StoreMenu />} />
+          <Route path="/store/dashboard" element={<StoreDashboard />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />

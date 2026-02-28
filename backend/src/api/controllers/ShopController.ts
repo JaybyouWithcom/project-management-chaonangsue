@@ -31,6 +31,16 @@ const saveImageFromDataUrl = async (imageBase64: string): Promise<string> => {
 export class ShopController {
   constructor(private readonly shopService: ShopService) {}
 
+  detail = async (req: Request, res: Response): Promise<void> => {
+    const shopId = Number(req.params.shopId);
+    if (!Number.isInteger(shopId) || shopId <= 0) {
+      throw new AppError('shopId must be an integer', 400);
+    }
+
+    const shop = await this.shopService.getById(shopId);
+    sendSuccess(res, { shop });
+  };
+
   create = async (req: Request, res: Response): Promise<void> => {
     if (!req.auth?.userId) {
       throw new AppError('Unauthorized', 401);
@@ -63,5 +73,47 @@ export class ShopController {
 
     const shops = await this.shopService.listByUserId(req.auth.userId);
     sendSuccess(res, { shops });
+  };
+
+  update = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const shopId = Number(req.params.shopId);
+    if (!Number.isInteger(shopId) || shopId <= 0) {
+      throw new AppError('shopId must be an integer', 400);
+    }
+
+    const { shopName, description, imageBase64 } = req.body as Record<string, unknown>;
+
+    let imagePath: string | undefined;
+    if (isNonEmptyString(imageBase64)) {
+      imagePath = await saveImageFromDataUrl(imageBase64);
+    }
+
+    const shop = await this.shopService.update({
+      userId: req.auth.userId,
+      shopId,
+      shopName: isNonEmptyString(shopName) ? shopName : undefined,
+      description: description === null ? null : (typeof description === 'string' ? description : undefined),
+      imagePath,
+    });
+
+    sendSuccess(res, { shop });
+  };
+
+  delete = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const shopId = Number(req.params.shopId);
+    if (!Number.isInteger(shopId) || shopId <= 0) {
+      throw new AppError('shopId must be an integer', 400);
+    }
+
+    await this.shopService.delete({ userId: req.auth.userId, shopId });
+    sendSuccess(res, { deleted: true });
   };
 }

@@ -49,7 +49,7 @@ export class ShopService {
     userId: number;
     shopId: number;
     shopName?: string;
-    description?: string;
+    description?: string | null;
     imagePath?: string;
   }): Promise<Shop> {
     const shop = await this.shopRepository.findById(input.shopId);
@@ -66,7 +66,7 @@ export class ShopService {
     }
 
     const nextDescription = input.description !== undefined
-      ? (input.description.trim() ? input.description.trim() : null)
+      ? (input.description === null ? null : (input.description.trim() ? input.description.trim() : null))
       : shop.description;
     const nextImagePath = input.imagePath ?? shop.imagePath;
 

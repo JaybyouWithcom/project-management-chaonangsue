@@ -96,7 +96,7 @@ export class ShopController {
       userId: req.auth.userId,
       shopId,
       shopName: isNonEmptyString(shopName) ? shopName : undefined,
-      description: typeof description === 'string' ? description : undefined,
+      description: description === null ? null : (typeof description === 'string' ? description : undefined),
       imagePath,
     });
 

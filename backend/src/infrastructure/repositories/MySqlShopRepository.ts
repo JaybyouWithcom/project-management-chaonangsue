@@ -62,6 +62,24 @@ export class MySqlShopRepository implements ShopRepository {
     return rows.map(mapShop);
   }
 
+  async updateById(shopId: number, input: { shopName: string; description: string | null; imagePath: string }): Promise<Shop> {
+    await dbPool.query(
+      `
+      UPDATE shops
+      SET shop_name = ?, description = ?, image_path = ?, updated_at = NOW()
+      WHERE shop_id = ? AND deleted_at IS NULL
+      `,
+      [input.shopName, input.description, input.imagePath, shopId],
+    );
+
+    const shop = await this.findById(shopId);
+    if (!shop) {
+      throw new Error('Failed to load updated shop');
+    }
+
+    return shop;
+  }
+
   async softDeleteById(shopId: number): Promise<void> {
     await dbPool.query('UPDATE shops SET deleted_at = NOW() WHERE shop_id = ? AND deleted_at IS NULL', [shopId]);
   }

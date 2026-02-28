@@ -1,19 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ChevronDown, Search, SlidersHorizontal } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ChevronDown, Edit, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import BookCard from "@/components/BookCard";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { apiGet, HttpError, resolveImageUrl } from "@/lib/api";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { apiDelete, apiGet, apiPatch, HttpError, resolveImageUrl } from "@/lib/api";
 import { conditions, genres } from "@/lib/mockData";
 import { type ApiBook, toUiBook } from "@/lib/books";
+import { useToast } from "@/hooks/use-toast";
+import { getAuthToken } from "@/lib/auth";
 
 interface ApiShop {
   shopId: number;
@@ -26,6 +31,9 @@ const ShopPage = () => {
   const { shopId } = useParams<{ shopId: string }>();
   const parsedShopId = Number(shopId);
   const hasValidShopId = Number.isInteger(parsedShopId) && parsedShopId > 0;
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const token = getAuthToken();
 
   const [search, setSearch] = useState("");
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
@@ -33,6 +41,11 @@ const ShopPage = () => {
   const [sortBy, setSortBy] = useState<string>("popular");
   const [isGenreDropdownOpen, setIsGenreDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [editShopOpen, setEditShopOpen] = useState(false);
+  const [deleteShopOpen, setDeleteShopOpen] = useState(false);
+  const [shopForm, setShopForm] = useState({ shopName: "", description: "" });
+  const [shopImageFile, setShopImageFile] = useState<File | null>(null);
+  const [deleteShopConfirm, setDeleteShopConfirm] = useState("");
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -52,6 +65,78 @@ const ShopPage = () => {
       return response.data.shop;
     },
   });
+
+  const openEditShopDialog = () => {
+    if (!shopQuery.data) return;
+    setShopForm({
+      shopName: shopQuery.data.shopName,
+      description: shopQuery.data.description ?? "",
+    });
+    setShopImageFile(null);
+    setEditShopOpen(true);
+  };
+
+  const handleUpdateShop = async () => {
+    if (!token) {
+      toast({ title: "กรุณา login ก่อนแก้ไขร้าน", variant: "destructive" });
+      return;
+    }
+    if (!shopQuery.data) return;
+    if (!shopForm.shopName.trim()) {
+      toast({ title: "กรุณาระบุชื่อร้าน", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const imageBase64 = shopImageFile ? await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string") {
+            resolve(reader.result);
+            return;
+          }
+          reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+        };
+        reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+        reader.readAsDataURL(shopImageFile);
+      }) : undefined;
+
+      await apiPatch(`/api/shops/${parsedShopId}`, {
+        shopName: shopForm.shopName.trim(),
+        description: shopForm.description.trim() ? shopForm.description.trim() : null,
+        imageBase64,
+      }, token);
+
+      toast({ title: "อัปเดตร้านสำเร็จ" });
+      setEditShopOpen(false);
+      await shopQuery.refetch();
+    } catch (error) {
+      toast({
+        title: "อัปเดตร้านไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteShop = async () => {
+    if (!token) {
+      toast({ title: "กรุณา login ก่อนลบร้าน", variant: "destructive" });
+      return;
+    }
+    if (!shopQuery.data) return;
+    try {
+      await apiDelete(`/api/shops/${parsedShopId}`, token);
+      toast({ title: "ลบร้านสำเร็จ" });
+      navigate("/store");
+    } catch (error) {
+      toast({
+        title: "ลบร้านไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
+  };
 
   const booksQuery = useQuery({
     queryKey: ["shop-books", parsedShopId, search],
@@ -85,6 +170,8 @@ const ShopPage = () => {
 
   const shopErrorMessage =
     shopQuery.error instanceof HttpError ? shopQuery.error.message : "ไม่สามารถโหลดข้อมูลร้านได้";
+  const canShowShopActions = !!token;
+  const canDeleteShop = deleteShopConfirm.trim() === (shopQuery.data?.shopName ?? "");
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -105,6 +192,31 @@ const ShopPage = () => {
                 className="h-52 w-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
+              {canShowShopActions && (
+                <div className="absolute right-4 top-4 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    className="h-9 w-9 bg-white/90 text-foreground hover:bg-white"
+                    onClick={openEditShopDialog}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="h-9 w-9 bg-destructive/90 hover:bg-destructive"
+                    onClick={() => {
+                      setDeleteShopConfirm("");
+                      setDeleteShopOpen(true);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
               <div className="absolute inset-x-0 bottom-0 p-5 text-white">
                 <h1 className="font-display text-3xl md:text-4xl font-bold">{shopQuery.data.shopName}</h1>
                 {shopQuery.data.description && (
@@ -112,6 +224,87 @@ const ShopPage = () => {
                 )}
               </div>
             </section>
+
+            <Dialog
+              open={editShopOpen}
+              onOpenChange={(open) => {
+                setEditShopOpen(open);
+                if (!open) {
+                  setShopImageFile(null);
+                }
+              }}
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>แก้ไขร้าน</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="shop-name">ชื่อร้าน</Label>
+                    <Input
+                      id="shop-name"
+                      value={shopForm.shopName}
+                      onChange={(event) => setShopForm((prev) => ({ ...prev, shopName: event.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="shop-desc">รายละเอียดร้าน</Label>
+                    <Textarea
+                      id="shop-desc"
+                      rows={4}
+                      value={shopForm.description}
+                      onChange={(event) => setShopForm((prev) => ({ ...prev, description: event.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="shop-image">แบนเนอร์ร้าน (ถ้าต้องการเปลี่ยน)</Label>
+                    <Input
+                      id="shop-image"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(event) => setShopImageFile(event.target.files?.[0] ?? null)}
+                    />
+                  </div>
+                  <Button className="w-full" onClick={handleUpdateShop}>
+                    บันทึกการแก้ไข
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog
+              open={deleteShopOpen}
+              onOpenChange={(open) => {
+                setDeleteShopOpen(open);
+                if (!open) {
+                  setDeleteShopConfirm("");
+                }
+              }}
+            >
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="font-display">ยืนยันการลบร้าน</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    พิมพ์ชื่อร้าน <span className="font-semibold text-foreground">{shopQuery.data.shopName}</span> เพื่อยืนยันการลบ
+                  </p>
+                  <Input
+                    value={deleteShopConfirm}
+                    onChange={(event) => setDeleteShopConfirm(event.target.value)}
+                    placeholder="พิมพ์ชื่อร้าน"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setDeleteShopOpen(false)}>
+                      ยกเลิก
+                    </Button>
+                    <Button variant="destructive" disabled={!canDeleteShop} onClick={handleDeleteShop}>
+                      ลบร้าน
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <div className="bg-card rounded-xl border p-4 mb-6 space-y-4">
               <div className="relative">

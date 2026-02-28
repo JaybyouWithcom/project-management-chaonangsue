@@ -140,4 +140,45 @@ export class MySqlBookRepository implements BookRepository {
 
     return rows.length > 0;
   }
+
+  async updateById(bookId: number, input: {
+    title: string;
+    imagePath: string;
+    author: string;
+    isbn: string | null;
+    genre: string | null;
+    bookCondition: '1' | '2' | '3' | '4' | '5' | null;
+    description: string | null;
+    bookPrice: number;
+  }): Promise<Book> {
+    await dbPool.query(
+      `
+      UPDATE books
+      SET title = ?, image_path = ?, author = ?, isbn = ?, genre = ?, book_condition = ?, description = ?, book_price = ?
+      WHERE book_id = ?
+      `,
+      [
+        input.title,
+        input.imagePath,
+        input.author,
+        input.isbn,
+        input.genre,
+        input.bookCondition,
+        input.description,
+        input.bookPrice,
+        bookId,
+      ],
+    );
+
+    const updated = await this.findById(bookId);
+    if (!updated) {
+      throw new Error('Failed to load updated book');
+    }
+
+    return updated;
+  }
+
+  async deleteById(bookId: number): Promise<void> {
+    await dbPool.query('DELETE FROM books WHERE book_id = ?', [bookId]);
+  }
 }

@@ -34,6 +34,14 @@ export const buildBookRoutes = (bookController: BookController, authMiddleware: 
     bookController.create(req, res).catch(next);
   });
 
+  router.patch('/:bookId', authMiddleware, (req, res, next) => {
+    bookController.update(req, res).catch(next);
+  });
+
+  router.delete('/:bookId', authMiddleware, (req, res, next) => {
+    bookController.delete(req, res).catch(next);
+  });
+
   router.post('/:bookId/rent', authMiddleware, (req, res, next) => {
     bookController.rent(req, res).catch(next);
   });

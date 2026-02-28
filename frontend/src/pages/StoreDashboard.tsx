@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import {
   BookOpen, Package, DollarSign, AlertTriangle, Plus, Edit, Trash2,
-  TrendingUp, BarChart3, Users, Search, Store,
+  TrendingUp, BarChart3, Users, Search,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,13 +13,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { mockOrders, genres } from "@/lib/mockData";
 import { conditionOptions, normalizeConditionLabel } from "@/lib/bookCondition";
 import { useToast } from "@/hooks/use-toast";
-import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 
 interface ApiBook {
@@ -30,6 +31,7 @@ interface ApiBook {
   isbn: string | null;
   genre: string | null;
   bookCondition: string | null;
+  description: string | null;
   bookPrice: string;
   status: "Available" | "Rented";
 }
@@ -69,6 +71,7 @@ const paymentStatusColors: Record<string, string> = {
 
 const StoreDashboard = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const shopId = Number(searchParams.get("shopId"));
   const hasValidShopId = Number.isInteger(shopId) && shopId > 0;
   const token = getAuthToken();
@@ -76,6 +79,15 @@ const StoreDashboard = () => {
   const queryClient = useQueryClient();
   const [bookSearch, setBookSearch] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [bookDialogOpen, setBookDialogOpen] = useState(false);
+  const [editingBook, setEditingBook] = useState<ApiBook | null>(null);
+  const [deletingBook, setDeletingBook] = useState<ApiBook | null>(null);
+  const [deleteBookConfirm, setDeleteBookConfirm] = useState("");
+  const [editShopOpen, setEditShopOpen] = useState(false);
+  const [deleteShopOpen, setDeleteShopOpen] = useState(false);
+  const [shopForm, setShopForm] = useState({ shopName: "", description: "" });
+  const [shopImageFile, setShopImageFile] = useState<File | null>(null);
+  const [deleteShopConfirm, setDeleteShopConfirm] = useState("");
   const [form, setForm] = useState({
     title: "",
     author: "",
@@ -85,6 +97,18 @@ const StoreDashboard = () => {
     bookCondition: "2",
     description: "",
   });
+
+  const resetBookForm = () => {
+    setForm({
+      title: "",
+      author: "",
+      isbn: "",
+      genre: "",
+      bookPrice: "",
+      bookCondition: "2",
+      description: "",
+    });
+  };
 
   // ดึงข้อมูลร้านค้าทั้งหมดของเราเพื่อหาชื่อร้านปัจจุบัน (ดึงจาก Cache ของหน้า StoreMenu ได้เลย)
   const { data: shops = [] } = useQuery({
@@ -129,24 +153,36 @@ const StoreDashboard = () => {
     b.author.toLowerCase().includes(bookSearch.toLowerCase()),
   ), [books, bookSearch]);
 
-  const handleCreateBook = async () => {
+  const handleSaveBook = async () => {
     const token = getAuthToken();
     if (!token) {
       toast({ title: "กรุณา login ก่อนลงหนังสือ", variant: "destructive" });
       return;
     }
-    if (!hasValidShopId) {
+    if (!hasValidShopId && !editingBook) {
       toast({ title: "ไม่พบร้านที่เลือก", description: "กรุณากลับไปเลือกจากเมนูร้านของฉัน", variant: "destructive" });
+      return;
+    }
+    if (!form.title.trim()) {
+      toast({ title: "กรุณากรอกชื่อหนังสือ", variant: "destructive" });
+      return;
+    }
+    if (!form.author.trim()) {
+      toast({ title: "กรุณากรอกชื่อผู้เขียน", variant: "destructive" });
+      return;
+    }
+    if (!form.bookPrice || Number.isNaN(Number(form.bookPrice))) {
+      toast({ title: "กรุณากรอกราคาหนังสือให้ถูกต้อง", variant: "destructive" });
       return;
     }
 
     try {
-      if (!imageFile) {
+      if (!editingBook && !imageFile) {
         toast({ title: "กรุณาเลือกรูปปกหนังสือ", variant: "destructive" });
         return;
       }
 
-      const imageBase64 = await new Promise<string>((resolve, reject) => {
+      const imageBase64 = imageFile ? await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
           if (typeof reader.result === 'string') {
@@ -158,29 +194,163 @@ const StoreDashboard = () => {
         };
         reader.onerror = () => reject(new Error('อ่านไฟล์รูปไม่สำเร็จ'));
         reader.readAsDataURL(imageFile);
-      });
+      }) : undefined;
 
-      await apiPost("/api/books", {
-        ...form,
-        shopId,
-        bookPrice: Number(form.bookPrice),
-        imageBase64,
-      }, token);
-      toast({ title: "เพิ่มหนังสือสำเร็จ! 📚" });
-      setForm({ title: "", author: "", isbn: "", genre: "", bookPrice: "", bookCondition: "2", description: "" });
+      if (editingBook) {
+        await apiPatch(`/api/books/${editingBook.bookId}`, {
+          ...form,
+          bookPrice: Number(form.bookPrice),
+          imageBase64,
+        }, token);
+        toast({ title: "อัปเดตหนังสือสำเร็จ" });
+      } else {
+        await apiPost("/api/books", {
+          ...form,
+          shopId,
+          bookPrice: Number(form.bookPrice),
+          imageBase64,
+        }, token);
+        toast({ title: "เพิ่มหนังสือสำเร็จ! 📚" });
+      }
+
+      resetBookForm();
       setImageFile(null);
-      await queryClient.invalidateQueries({ queryKey: ["admin-books"] });
+      setEditingBook(null);
+      setBookDialogOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["admin-books", shopId] });
     } catch (error) {
       toast({
-        title: "เพิ่มหนังสือไม่สำเร็จ",
+        title: editingBook ? "อัปเดตหนังสือไม่สำเร็จ" : "เพิ่มหนังสือไม่สำเร็จ",
         description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
         variant: "destructive",
       });
     }
   };
 
+  const openCreateBookDialog = () => {
+    setEditingBook(null);
+    resetBookForm();
+    setImageFile(null);
+    setBookDialogOpen(true);
+  };
+
+  const openEditBookDialog = (book: ApiBook) => {
+    setEditingBook(book);
+    setForm({
+      title: book.title,
+      author: book.author,
+      isbn: book.isbn ?? "",
+      genre: book.genre ?? "",
+      bookPrice: String(book.bookPrice ?? ""),
+      bookCondition: book.bookCondition ?? "2",
+      description: book.description ?? "",
+    });
+    setImageFile(null);
+    setBookDialogOpen(true);
+  };
+
+  const handleDeleteBook = async () => {
+    if (!deletingBook) return;
+    const token = getAuthToken();
+    if (!token) {
+      toast({ title: "กรุณา login ก่อนลบหนังสือ", variant: "destructive" });
+      return;
+    }
+    try {
+      await apiDelete(`/api/books/${deletingBook.bookId}`, token);
+      toast({ title: "ลบหนังสือสำเร็จ" });
+      setDeletingBook(null);
+      setDeleteBookConfirm("");
+      await queryClient.invalidateQueries({ queryKey: ["admin-books", shopId] });
+    } catch (error) {
+      toast({
+        title: "ลบหนังสือไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const selectedShop = shops.find((s) => s.shopId === shopId);
   // ค้นหาชื่อร้านจากข้อมูลร้านค้าทั้งหมด ถ้าไม่พบให้แสดงคำว่า "แดชบอร์ดร้าน"
-  const shopName = shops.find((s) => s.shopId === shopId)?.shopName || "แดชบอร์ดร้าน";
+  const shopName = selectedShop?.shopName || "แดชบอร์ดร้าน";
+  const shopBanner = selectedShop?.imagePath
+    ? resolveImageUrl(selectedShop.imagePath)
+    : "https://images.unsplash.com/photo-1521017432531-fbd92d768814?auto=format&fit=crop&w=1200&q=80";
+  const canShowShopActions = !!token && !!selectedShop;
+
+  const openEditShopDialog = () => {
+    if (!selectedShop) return;
+    setShopForm({
+      shopName: selectedShop.shopName,
+      description: selectedShop.description ?? "",
+    });
+    setShopImageFile(null);
+    setEditShopOpen(true);
+  };
+
+  const handleUpdateShop = async () => {
+    if (!token) {
+      toast({ title: "กรุณา login ก่อนแก้ไขร้าน", variant: "destructive" });
+      return;
+    }
+    if (!selectedShop) return;
+    if (!shopForm.shopName.trim()) {
+      toast({ title: "กรุณาระบุชื่อร้าน", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const imageBase64 = shopImageFile ? await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string") {
+            resolve(reader.result);
+            return;
+          }
+          reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+        };
+        reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+        reader.readAsDataURL(shopImageFile);
+      }) : undefined;
+
+      await apiPatch(`/api/shops/${selectedShop.shopId}`, {
+        shopName: shopForm.shopName.trim(),
+        description: shopForm.description.trim() ? shopForm.description.trim() : null,
+        imageBase64,
+      }, token);
+
+      toast({ title: "อัปเดตร้านสำเร็จ" });
+      setEditShopOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["my-shops"] });
+    } catch (error) {
+      toast({
+        title: "อัปเดตร้านไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteShop = async () => {
+    if (!token) {
+      toast({ title: "กรุณา login ก่อนลบร้าน", variant: "destructive" });
+      return;
+    }
+    if (!selectedShop) return;
+    try {
+      await apiDelete(`/api/shops/${selectedShop.shopId}`, token);
+      toast({ title: "ลบร้านสำเร็จ" });
+      await queryClient.invalidateQueries({ queryKey: ["my-shops"] });
+      navigate("/store");
+    } catch (error) {
+      toast({
+        title: "ลบร้านไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -189,54 +359,42 @@ const StoreDashboard = () => {
         {!hasValidShopId && (
           <p className="text-destructive mb-4">ไม่พบ shopId กรุณาเลือกเข้าร้านจากหน้าเมนูร้านของฉัน</p>
         )}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-          <div>
-            {/* นำตัวแปร shopName มาแสดงตรงนี้ */}
-            <h1 className="font-display text-3xl md:text-4xl font-bold flex items-center gap-3">
-              <Store className="h-8 w-8 text-primary" />
-              {shopName}
-            </h1>
-            <p className="text-muted-foreground mt-1">จัดการคลัง คำสั่งเช่า และรายได้</p>
-          </div>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="bg-primary text-primary-foreground" disabled={!hasValidShopId}>
-                <Plus className="mr-2 h-4 w-4" /> เพิ่มหนังสือ
+        <section className="relative overflow-hidden rounded-2xl border mb-6">
+          <img src={shopBanner} alt={shopName} className="h-52 w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
+          {canShowShopActions && (
+            <div className="absolute right-4 top-4 flex items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="h-9 w-9 bg-white/90 text-foreground hover:bg-white"
+                onClick={openEditShopDialog}
+              >
+                <Edit className="h-4 w-4" />
               </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="font-display">เพิ่มหนังสือใหม่</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div><Label>ชื่อหนังสือ</Label><Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} /></div>
-                <div><Label>ผู้เขียน</Label><Input value={form.author} onChange={(e) => setForm((p) => ({ ...p, author: e.target.value }))} /></div>
-                <div><Label>ISBN</Label><Input value={form.isbn} onChange={(e) => setForm((p) => ({ ...p, isbn: e.target.value }))} /></div>
-                <div><Label>รูปปกหนังสือ</Label><Input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} /></div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>หมวดหมู่</Label>
-                    <Select value={form.genre} onValueChange={(genre) => setForm((p) => ({ ...p, genre }))}>
-                      <SelectTrigger><SelectValue placeholder="เลือก" /></SelectTrigger>
-                      <SelectContent>{genres.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div><Label>ราคาหนังสือ</Label><Input type="number" value={form.bookPrice} onChange={(e) => setForm((p) => ({ ...p, bookPrice: e.target.value }))} /></div>
-                </div>
-                <div>
-                  <Label>สภาพหนังสือ</Label>
-                  <Select value={form.bookCondition} onValueChange={(bookCondition) => setForm((p) => ({ ...p, bookCondition }))}>
-                    <SelectTrigger><SelectValue placeholder="เลือกสภาพ" /></SelectTrigger>
-                    <SelectContent>{conditionOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <p className="text-xs text-muted-foreground">ระบบจะคำนวณอัตโนมัติ: มัดจำ 50% | เช่า 15 วัน 30% | เช่า 30 วัน 50%</p>
-                <div><Label>รายละเอียด</Label><Input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} /></div>
-                <Button className="w-full bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleCreateBook}>บันทึก</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+              <Button
+                type="button"
+                variant="destructive"
+                size="icon"
+                className="h-9 w-9 bg-destructive/90 hover:bg-destructive"
+                onClick={() => {
+                  setDeleteShopConfirm("");
+                  setDeleteShopOpen(true);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+            {/* นำตัวแปร shopName มาแสดงตรงนี้ */}
+            <h1 className="font-display text-3xl md:text-4xl font-bold">{shopName}</h1>
+            {selectedShop?.description && (
+              <p className="text-sm md:text-base text-white/90 mt-1 line-clamp-2">{selectedShop.description}</p>
+            )}
+          </div>
+        </section>
 
         {isError && <p className="text-destructive mb-4">โหลดข้อมูลหนังสือจาก API ไม่สำเร็จ</p>}
 
@@ -256,12 +414,63 @@ const StoreDashboard = () => {
         </div>
 
         <Tabs defaultValue="inventory">
-          <TabsList className="mb-6">
-            <TabsTrigger value="inventory"><BookOpen className="h-4 w-4 mr-1" /> คลังหนังสือ</TabsTrigger>
-            <TabsTrigger value="orders"><Package className="h-4 w-4 mr-1" /> คำสั่งเช่า</TabsTrigger>
-            <TabsTrigger value="revenue"><BarChart3 className="h-4 w-4 mr-1" /> รายงาน</TabsTrigger>
-            <TabsTrigger value="payments"><DollarSign className="h-4 w-4 mr-1" /> การชำระเงิน</TabsTrigger>
-          </TabsList>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <TabsList>
+              <TabsTrigger value="inventory"><BookOpen className="h-4 w-4 mr-1" /> คลังหนังสือ</TabsTrigger>
+              <TabsTrigger value="orders"><Package className="h-4 w-4 mr-1" /> คำสั่งเช่า</TabsTrigger>
+              <TabsTrigger value="revenue"><BarChart3 className="h-4 w-4 mr-1" /> รายงาน</TabsTrigger>
+              <TabsTrigger value="payments"><DollarSign className="h-4 w-4 mr-1" /> การชำระเงิน</TabsTrigger>
+            </TabsList>
+            <Dialog
+              open={bookDialogOpen}
+              onOpenChange={(open) => {
+                setBookDialogOpen(open);
+                if (!open) {
+                  setEditingBook(null);
+                  setImageFile(null);
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button className="bg-primary text-primary-foreground" disabled={!hasValidShopId} onClick={openCreateBookDialog}>
+                  <Plus className="mr-2 h-4 w-4" /> เพิ่มหนังสือ
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="font-display">{editingBook ? "แก้ไขหนังสือ" : "เพิ่มหนังสือใหม่"}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div><Label>ชื่อหนังสือ</Label><Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} /></div>
+                  <div><Label>ผู้เขียน</Label><Input value={form.author} onChange={(e) => setForm((p) => ({ ...p, author: e.target.value }))} /></div>
+                  <div><Label>ISBN</Label><Input value={form.isbn} onChange={(e) => setForm((p) => ({ ...p, isbn: e.target.value }))} /></div>
+                  <div><Label>รูปปกหนังสือ</Label><Input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>หมวดหมู่</Label>
+                      <Select value={form.genre} onValueChange={(genre) => setForm((p) => ({ ...p, genre }))}>
+                        <SelectTrigger><SelectValue placeholder="เลือก" /></SelectTrigger>
+                        <SelectContent>{genres.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div><Label>ราคาหนังสือ</Label><Input type="number" value={form.bookPrice} onChange={(e) => setForm((p) => ({ ...p, bookPrice: e.target.value }))} /></div>
+                  </div>
+                  <div>
+                    <Label>สภาพหนังสือ</Label>
+                    <Select value={form.bookCondition} onValueChange={(bookCondition) => setForm((p) => ({ ...p, bookCondition }))}>
+                      <SelectTrigger><SelectValue placeholder="เลือกสภาพ" /></SelectTrigger>
+                      <SelectContent>{conditionOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-xs text-muted-foreground">ระบบจะคำนวณอัตโนมัติ: มัดจำ 50% | เช่า 15 วัน 30% | เช่า 30 วัน 50%</p>
+                  <div><Label>รายละเอียด</Label><Input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} /></div>
+                  <Button className="w-full bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleSaveBook}>
+                    {editingBook ? "บันทึกการแก้ไข" : "บันทึก"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
 
           <TabsContent value="inventory">
             <div className="bg-card rounded-xl border p-4 md:p-6">
@@ -280,8 +489,17 @@ const StoreDashboard = () => {
                       <p className="text-xs text-muted-foreground">สภาพหนังสือ: {normalizeConditionLabel(book.bookCondition)}</p>
                     </div>
                     <Badge variant={book.status === 'Available' ? 'default' : 'secondary'}>{book.status}</Badge>
-                    <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => openEditBookDialog(book)}><Edit className="h-4 w-4" /></Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setDeletingBook(book);
+                        setDeleteBookConfirm("");
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -322,6 +540,129 @@ const StoreDashboard = () => {
             </div>
           </TabsContent>
         </Tabs>
+
+        <Dialog
+          open={editShopOpen}
+          onOpenChange={(open) => {
+            setEditShopOpen(open);
+            if (!open) {
+              setShopImageFile(null);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>แก้ไขร้าน</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="shop-name-edit">ชื่อร้าน</Label>
+                <Input
+                  id="shop-name-edit"
+                  value={shopForm.shopName}
+                  onChange={(event) => setShopForm((prev) => ({ ...prev, shopName: event.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="shop-desc-edit">รายละเอียดร้าน</Label>
+                <Textarea
+                  id="shop-desc-edit"
+                  rows={4}
+                  value={shopForm.description}
+                  onChange={(event) => setShopForm((prev) => ({ ...prev, description: event.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="shop-image-edit">แบนเนอร์ร้าน (ถ้าต้องการเปลี่ยน)</Label>
+                <Input
+                  id="shop-image-edit"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) => setShopImageFile(event.target.files?.[0] ?? null)}
+                />
+              </div>
+              <Button className="w-full" onClick={handleUpdateShop}>
+                บันทึกการแก้ไข
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={deleteShopOpen}
+          onOpenChange={(open) => {
+            setDeleteShopOpen(open);
+            if (!open) {
+              setDeleteShopConfirm("");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-display">ยืนยันการลบร้าน</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                พิมพ์ชื่อร้าน <span className="font-semibold text-foreground">{selectedShop?.shopName}</span> เพื่อยืนยันการลบ
+              </p>
+              <Input
+                value={deleteShopConfirm}
+                onChange={(event) => setDeleteShopConfirm(event.target.value)}
+                placeholder="พิมพ์ชื่อร้าน"
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setDeleteShopOpen(false)}>
+                  ยกเลิก
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={!selectedShop || deleteShopConfirm.trim() !== selectedShop.shopName}
+                  onClick={handleDeleteShop}
+                >
+                  ลบร้าน
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={!!deletingBook}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDeletingBook(null);
+              setDeleteBookConfirm("");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-display">ยืนยันการลบหนังสือ</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                พิมพ์ชื่อหนังสือ <span className="font-semibold text-foreground">{deletingBook?.title}</span> เพื่อยืนยันการลบ
+              </p>
+              <Input
+                value={deleteBookConfirm}
+                onChange={(event) => setDeleteBookConfirm(event.target.value)}
+                placeholder="พิมพ์ชื่อหนังสือ"
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => { setDeletingBook(null); setDeleteBookConfirm(""); }}>
+                  ยกเลิก
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={!deletingBook || deleteBookConfirm.trim() !== deletingBook.title}
+                  onClick={handleDeleteBook}
+                >
+                  ลบหนังสือ
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {isError && <div className="text-sm text-destructive mt-4">โหลดข้อมูลคลังหนังสือไม่สำเร็จ</div>}
       </div>

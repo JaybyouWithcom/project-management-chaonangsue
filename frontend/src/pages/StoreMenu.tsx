@@ -56,7 +56,7 @@ const StoreMenu = () => {
       navigate("/auth");
       return;
     }
-    if (!name.trim() || !description.trim() || !imageFile) {
+    if (!name.trim() || !imageFile) {
       return;
     }
 
@@ -79,7 +79,7 @@ const StoreMenu = () => {
         "/api/shops",
         {
           shopName: name.trim(),
-          description: description.trim(),
+          description: description.trim() ? description.trim() : null,
           imageBase64,
         },
         token,
@@ -146,7 +146,7 @@ const StoreMenu = () => {
                   </div>
                   <div>
                     <Label htmlFor="shop-desc">รายละเอียดร้าน</Label>
-                    <Textarea id="shop-desc" value={description} onChange={(event) => setDescription(event.target.value)} required rows={4} />
+                    <Textarea id="shop-desc" value={description} onChange={(event) => setDescription(event.target.value)} rows={4} />
                   </div>
                   <div>
                     <Label htmlFor="shop-image">แบนเนอร์ร้าน</Label>

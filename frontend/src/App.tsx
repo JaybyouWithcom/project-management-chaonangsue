@@ -14,6 +14,7 @@ import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/Auth";
 import Settings from "./pages/Settings";
 import WalletPage from "./pages/Wallet";
+import WalletTopupPage from "./pages/WalletTopup";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/wallet" element={<WalletPage />} />
+          <Route path="/wallet/topup" element={<WalletTopupPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

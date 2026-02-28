@@ -82,4 +82,30 @@ export class AuthController {
 
     sendSuccess(res, { user });
   };
+
+  topUpWallet = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const { amount, method } = req.body as Record<string, unknown>;
+    const numericAmount =
+      typeof amount === 'number' ? amount : typeof amount === 'string' ? Number(amount) : Number.NaN;
+
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      throw new AppError('จำนวนเงินที่เติมไม่ถูกต้อง', 400);
+    }
+
+    if (!isNonEmptyString(method)) {
+      throw new AppError('กรุณาเลือกช่องทางการเติมเงิน', 400);
+    }
+
+    const result = await this.authService.topUpWallet({
+      userId: req.auth.userId,
+      amount: numericAmount,
+      method,
+    });
+
+    sendSuccess(res, result);
+  };
 }

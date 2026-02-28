@@ -75,16 +75,18 @@ const WalletPage = () => {
                     <p className="text-2xl font-display font-bold text-primary">{balanceLabel}</p>
                   </div>
                 </div>
-                <Button className="shrink-0">
-                  <PlusCircle className="h-4 w-4 mr-2" />
-                  เติมเงิน
+                <Button asChild className="shrink-0">
+                  <Link to="/wallet/topup">
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                    เติมเงิน
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
           )}
 
           <p className="text-muted-foreground text-sm">
-            เติมวอลเล็ตได้หลากหลายช่องทางวันนี้ พร้อมเช่าหนังสือเล่มโปรดได้ทันทีทุกเวลา
+            เติมวอลเล็ตวันนี้ พร้อมเช่าหนังสือเล่มโปรดได้ทันทีทุกเวลา
           </p>
         </div>
       </main>

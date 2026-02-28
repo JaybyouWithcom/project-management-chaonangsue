@@ -22,9 +22,14 @@ import { getAuthToken } from "@/lib/auth";
 
 interface ApiShop {
   shopId: number;
+  userId: number;
   shopName: string;
   description: string | null;
   imagePath: string;
+}
+
+interface AuthMe {
+  userId: number;
 }
 
 const ShopPage = () => {
@@ -66,6 +71,15 @@ const ShopPage = () => {
     },
   });
 
+  const meQuery = useQuery({
+    queryKey: ["auth-me", token],
+    enabled: !!token,
+    queryFn: async () => {
+      const response = await apiGet<{ user: AuthMe }>("/api/auth/me", token ?? undefined);
+      return response.data.user;
+    },
+  });
+
   const openEditShopDialog = () => {
     if (!shopQuery.data) return;
     setShopForm({
@@ -82,6 +96,10 @@ const ShopPage = () => {
       return;
     }
     if (!shopQuery.data) return;
+    if (meQuery.data?.userId !== shopQuery.data.userId) {
+      toast({ title: "คุณไม่มีสิทธิ์แก้ไขร้านนี้", variant: "destructive" });
+      return;
+    }
     if (!shopForm.shopName.trim()) {
       toast({ title: "กรุณาระบุชื่อร้าน", variant: "destructive" });
       return;
@@ -125,6 +143,10 @@ const ShopPage = () => {
       return;
     }
     if (!shopQuery.data) return;
+    if (meQuery.data?.userId !== shopQuery.data.userId) {
+      toast({ title: "คุณไม่มีสิทธิ์ลบร้านนี้", variant: "destructive" });
+      return;
+    }
     try {
       await apiDelete(`/api/shops/${parsedShopId}`, token);
       toast({ title: "ลบร้านสำเร็จ" });
@@ -170,7 +192,13 @@ const ShopPage = () => {
 
   const shopErrorMessage =
     shopQuery.error instanceof HttpError ? shopQuery.error.message : "ไม่สามารถโหลดข้อมูลร้านได้";
-  const canShowShopActions = !!token;
+  const isShopOwner = Boolean(
+    token &&
+    meQuery.data?.userId &&
+    shopQuery.data?.userId &&
+    meQuery.data.userId === shopQuery.data.userId,
+  );
+  const canShowShopActions = isShopOwner;
   const canDeleteShop = deleteShopConfirm.trim() === (shopQuery.data?.shopName ?? "");
 
   return (

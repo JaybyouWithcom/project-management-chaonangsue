@@ -16,12 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-<<<<<<< HEAD:frontend/src/pages/AdminDashboard.tsx
 import { genres } from "@/lib/mockData";
-=======
-import { mockOrders, genres } from "@/lib/mockData";
 import { conditionOptions, normalizeConditionLabel } from "@/lib/bookCondition";
->>>>>>> a06a4b1040207658978745bc4a645e9fc180b423:frontend/src/pages/StoreDashboard.tsx
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";

@@ -125,24 +125,40 @@ const AuthPage = () => {
           </TabsList>
 
           <TabsContent value="login" className="space-y-4">
-            <Input placeholder="Username หรือ Email" value={login} onChange={(e) => setLogin(e.target.value)} />
-            <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            <Button onClick={handleLogin} disabled={submitting} className="w-full">เข้าสู่ระบบ</Button>
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleLogin();
+              }}
+            >
+              <Input placeholder="Username หรือ Email" value={login} onChange={(e) => setLogin(e.target.value)} />
+              <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <Button type="submit" disabled={submitting} className="w-full">เข้าสู่ระบบ</Button>
+            </form>
           </TabsContent>
 
           <TabsContent value="register" className="space-y-3">
-            <Input placeholder="ชื่อ" value={registerForm.firstname} onChange={(e) => setRegisterForm((p) => ({ ...p, firstname: e.target.value }))} />
-            <Input placeholder="นามสกุล" value={registerForm.lastname} onChange={(e) => setRegisterForm((p) => ({ ...p, lastname: e.target.value }))} />
-            <Input placeholder="Username" value={registerForm.username} onChange={(e) => setRegisterForm((p) => ({ ...p, username: e.target.value }))} />
-            <Input placeholder="Email" value={registerForm.email} onChange={(e) => setRegisterForm((p) => ({ ...p, email: e.target.value }))} />
-            <Input
-              placeholder="เบอร์โทร (เช่น 081-234-5678)"
-              value={registerForm.phoneNumber}
-              onChange={(e) => setRegisterForm((p) => ({ ...p, phoneNumber: e.target.value }))}
-              maxLength={12}
-            />
-            <Input type="password" placeholder="Password" value={registerForm.password} onChange={(e) => setRegisterForm((p) => ({ ...p, password: e.target.value }))} />
-            <Button onClick={handleRegister} disabled={submitting} className="w-full">สมัครสมาชิก</Button>
+            <form
+              className="space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleRegister();
+              }}
+            >
+              <Input placeholder="ชื่อ" value={registerForm.firstname} onChange={(e) => setRegisterForm((p) => ({ ...p, firstname: e.target.value }))} />
+              <Input placeholder="นามสกุล" value={registerForm.lastname} onChange={(e) => setRegisterForm((p) => ({ ...p, lastname: e.target.value }))} />
+              <Input placeholder="Username" value={registerForm.username} onChange={(e) => setRegisterForm((p) => ({ ...p, username: e.target.value }))} />
+              <Input placeholder="Email" value={registerForm.email} onChange={(e) => setRegisterForm((p) => ({ ...p, email: e.target.value }))} />
+              <Input
+                placeholder="เบอร์โทร (เช่น 081-234-5678)"
+                value={registerForm.phoneNumber}
+                onChange={(e) => setRegisterForm((p) => ({ ...p, phoneNumber: e.target.value }))}
+                maxLength={12}
+              />
+              <Input type="password" placeholder="Password" value={registerForm.password} onChange={(e) => setRegisterForm((p) => ({ ...p, password: e.target.value }))} />
+              <Button type="submit" disabled={submitting} className="w-full">สมัครสมาชิก</Button>
+            </form>
           </TabsContent>
         </Tabs>
       </div>

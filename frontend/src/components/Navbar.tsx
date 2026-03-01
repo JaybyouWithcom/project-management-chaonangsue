@@ -96,11 +96,14 @@ const Navbar = () => {
         <div className="flex-1 flex justify-end items-center gap-3">
           {/* ซ่อนยอดเงินคงเหลือในจอใหญ่เมื่อยังไม่ล็อกอิน */}
           {loggedIn && (
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-secondary/50 border rounded-full text-sm">
+            <Link
+              to="/wallet"
+              className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-secondary/50 border rounded-full text-sm hover:bg-secondary/70 transition-colors"
+            >
               <Wallet className="h-4 w-4 text-primary" />
               <span className="font-medium text-muted-foreground">ยอดเงินคงเหลือ:</span>
               <span className="font-bold text-primary">{balanceLabel}</span>
-            </div>
+            </Link>
           )}
 
           {loggedIn ? (
@@ -136,13 +139,17 @@ const Navbar = () => {
         <div className="md:hidden border-t bg-card px-4 pb-4 pt-2 space-y-3">
           {/* ซ่อนยอดเงินคงเหลือในจอมือถือเมื่อยังไม่ล็อกอิน */}
           {loggedIn && (
-            <div className="flex items-center justify-between px-3 py-3 bg-secondary/30 rounded-lg text-sm border">
+            <Link
+              to="/wallet"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center justify-between px-3 py-3 bg-secondary/30 rounded-lg text-sm border hover:bg-secondary/50 transition-colors"
+            >
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Wallet className="h-4 w-4 text-primary" />
                 <span className="font-medium">ยอดเงินคงเหลือ</span>
               </div>
               <span className="font-bold text-primary">{balanceLabel}</span>
-            </div>
+            </Link>
           )}
 
           <div className="space-y-1">

@@ -227,28 +227,6 @@ const Settings = () => {
                   </div>
                 </CardContent>
               </Card>
-
-              {/* กระเป๋าเงิน */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Wallet className="h-5 w-5 text-primary" />
-                    กระเป๋าเงิน
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-muted-foreground text-sm">ยอดเงินคงเหลือปัจจุบัน</p>
-                    <p className="text-2xl font-display font-bold text-primary">
-                      ฿{currencyFormatter.format(Number(user.balance) || 0)}
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="flex items-center gap-1">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    {roleLabel[user.role]}
-                  </Badge>
-                </CardContent>
-              </Card>
             </>
           )}
         </div>

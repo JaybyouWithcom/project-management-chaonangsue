@@ -108,6 +108,24 @@ export class MySqlUserRepository implements UserRepository {
     return user;
   }
 
+  async incrementBalanceById(userId: number, amount: number): Promise<User> {
+    await dbPool.query(
+      `
+      UPDATE users
+      SET balance = ROUND(balance + ?, 2)
+      WHERE user_id = ? AND deleted_at IS NULL
+      `,
+      [amount, userId],
+    );
+
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new Error('User not found after balance update');
+    }
+
+    return user;
+  }
+
   async softDeleteById(userId: number): Promise<void> {
     await dbPool.query('UPDATE users SET deleted_at = NOW() WHERE user_id = ? AND deleted_at IS NULL', [userId]);
   }

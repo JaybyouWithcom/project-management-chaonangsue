@@ -34,9 +34,21 @@ interface UpdateProfileInput {
   phoneNumber?: string;
 }
 
+interface TopUpWalletInput {
+  userId: number;
+  amount: number;
+  method: string;
+}
+
 export interface AuthResponse {
   user: PublicUser;
   token: string;
+}
+
+export interface TopUpWalletResponse {
+  user: PublicUser;
+  amount: number;
+  method: string;
 }
 
 export class AuthService {
@@ -145,6 +157,28 @@ export class AuthService {
     });
 
     return toPublicUser(updated);
+  }
+
+  async topUpWallet(input: TopUpWalletInput): Promise<TopUpWalletResponse> {
+    const amount = Number(input.amount);
+    const method = input.method.trim();
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new AppError('จำนวนเงินที่เติมไม่ถูกต้อง', 400);
+    }
+
+    if (!method) {
+      throw new AppError('กรุณาเลือกช่องทางการเติมเงิน', 400);
+    }
+
+    const normalizedAmount = Math.round(amount * 100) / 100;
+    const updatedUser = await this.userRepository.incrementBalanceById(input.userId, normalizedAmount);
+
+    return {
+      user: toPublicUser(updatedUser),
+      amount: normalizedAmount,
+      method,
+    };
   }
 
   verifyToken(token: string): AuthJwtPayload {

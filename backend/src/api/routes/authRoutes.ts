@@ -25,5 +25,9 @@ export const buildAuthRoutes = (
     authController.updateMe(req, res).catch(next);
   });
 
+  router.post('/wallet/topup', authMiddleware, (req, res, next) => {
+    authController.topUpWallet(req, res).catch(next);
+  });
+
   return router;
 };

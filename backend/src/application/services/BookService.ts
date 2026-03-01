@@ -73,6 +73,9 @@ interface RentalRow extends RowDataPacket {
   book_id: number;
   book_title: string;
   book_cover: string;
+  book_author: string;
+  book_condition: string | null;
+  book_price: string;
   renter_name: string;
   renter_id: number;
   start_date: Date;
@@ -92,6 +95,9 @@ export interface RentalListItem {
   bookId: number;
   bookTitle: string;
   bookCover: string;
+  bookAuthor: string;
+  bookCondition: string | null;
+  bookPrice: number;
   renterName: string;
   renterId: number;
   startDate: string;
@@ -111,6 +117,9 @@ const mapRentalRow = (row: RentalRow): RentalListItem => ({
   bookId: row.book_id,
   bookTitle: row.book_title,
   bookCover: row.book_cover,
+  bookAuthor: row.book_author,
+  bookCondition: row.book_condition,
+  bookPrice: Number(row.book_price),
   renterName: row.renter_name,
   renterId: row.renter_id,
   startDate: row.start_date.toISOString(),
@@ -156,8 +165,8 @@ export class BookService {
   async getById(bookId: number): Promise<Book> {
     const book = await this.bookRepository.findById(bookId);
 
-    if (!book || book.status !== 'Available') {
-      throw new AppError('หนังสือเล่มนี้ไม่พร้อมให้ยืม', 404);
+    if (!book) {
+      throw new AppError('ไม่พบหนังสือเล่มนี้', 404);
     }
 
     return book;
@@ -229,6 +238,9 @@ export class BookService {
     totalAmount: number;
   }> {
     const book = await this.getById(bookId);
+    if (book.status !== 'Available') {
+      throw new AppError('หนังสือเล่มนี้ไม่พร้อมให้ยืม', 409);
+    }
     const now = new Date();
     const dueDate = new Date(now);
     dueDate.setDate(dueDate.getDate() + planDaysMap[plan]);
@@ -367,6 +379,9 @@ export class BookService {
         r.book_id,
         b.title AS book_title,
         b.image_path AS book_cover,
+        b.author AS book_author,
+        b.book_condition,
+        b.book_price,
         u.username AS renter_name,
         COALESCE(r.renter_id, r.borrower_id) AS renter_id,
         r.start_date,
@@ -415,6 +430,9 @@ export class BookService {
         r.book_id,
         b.title AS book_title,
         b.image_path AS book_cover,
+        b.author AS book_author,
+        b.book_condition,
+        b.book_price,
         u.username AS renter_name,
         COALESCE(r.renter_id, r.borrower_id) AS renter_id,
         r.start_date,

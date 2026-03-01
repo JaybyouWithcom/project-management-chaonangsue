@@ -41,6 +41,9 @@ interface ApiRental {
   bookId: number;
   bookTitle: string;
   bookCover: string;
+  bookAuthor: string;
+  bookCondition: string | null;
+  bookPrice: number;
   renterName: string;
   renterId: number;
   startDate: string;
@@ -169,7 +172,7 @@ const StoreDashboard = () => {
       const current = rentalsByBookId.get(rental.bookId);
       rentalsByBookId.set(rental.bookId, {
         hasBeenRented: true,
-        isCurrentlyRented: current?.isCurrentlyRented ?? rental.status !== "คืนแล้ว",
+        isCurrentlyRented: current ? current.isCurrentlyRented || rental.status !== "คืนแล้ว" : rental.status !== "คืนแล้ว",
         rental,
       });
     }
@@ -199,9 +202,9 @@ const StoreDashboard = () => {
           bookId: rental.bookId,
           title: rental.bookTitle,
           imagePath: rental.bookCover,
-          author: "-",
-          bookPrice: null,
-          bookCondition: null,
+          author: rental.bookAuthor,
+          bookPrice: String(rental.bookPrice),
+          bookCondition: rental.bookCondition,
           hasBeenRented: true,
           isCurrentlyRented: rental.status !== "คืนแล้ว",
           sourceBook: null,

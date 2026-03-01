@@ -41,6 +41,9 @@ interface RentalOrder {
   bookId: number;
   bookTitle: string;
   bookCover: string;
+  bookAuthor: string;
+  bookCondition: string | null;
+  bookPrice: number;
   renterName: string;
   renterId: number;
   startDate: string;
@@ -114,10 +117,10 @@ const CustomerDashboard = () => {
       .map((order) => ({
         bookId: order.bookId,
         title: order.bookTitle,
-        author: "หนังสือที่เคยยืม",
+        author: order.bookAuthor,
         imagePath: order.bookCover,
         isRented: true,
-        canOpenDetail: false,
+        canOpenDetail: true,
       }));
 
     return [...fromAvailable, ...fromRentedOnly];
@@ -318,9 +321,7 @@ const CustomerDashboard = () => {
                         <Link to={`/book/${book.bookId}`} className="mt-2 inline-block text-sm text-primary underline underline-offset-2">
                           ดูรายละเอียด
                         </Link>
-                      ) : (
-                        <p className="mt-2 text-xs text-muted-foreground">เล่มนี้ไม่พร้อมให้ดูรายละเอียดในขณะนี้</p>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 ))}

@@ -229,7 +229,7 @@ const BookDetail = () => {
                     key={plan}
                     variant={selectedPlan === plan ? "default" : "outline"}
                     onClick={() => setSelectedPlan(plan)}
-                    disabled={isOwnBook}
+                    disabled={isOwnBook || book.status !== "Available"}
                     className="h-auto py-4 flex flex-col items-center"
                   >
                     <span className="font-semibold">{planLabels[plan]}</span>

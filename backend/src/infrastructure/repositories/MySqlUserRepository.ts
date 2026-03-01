@@ -47,6 +47,14 @@ export class MySqlUserRepository implements UserRepository {
     return rows.length > 0 ? mapUser(rows[0]) : null;
   }
 
+  async findByPhoneNumber(phoneNumber: string): Promise<User | null> {
+    const [rows] = await dbPool.query<UserRow[]>(
+      'SELECT * FROM users WHERE phone_number = ? AND deleted_at IS NULL LIMIT 1',
+      [phoneNumber],
+    );
+    return rows.length > 0 ? mapUser(rows[0]) : null;
+  }
+
   async findById(userId: number): Promise<User | null> {
     const [rows] = await dbPool.query<UserRow[]>(
       'SELECT * FROM users WHERE user_id = ? AND deleted_at IS NULL LIMIT 1',

@@ -45,6 +45,8 @@ const roleLabel: Record<AuthUser["role"], string> = {
   Banned: "ถูกระงับ",
 };
 
+const normalizeThaiPhone = (value: string): string => value.replace(/[^0-9]/g, '');
+
 const Settings = () => {
   const token = getAuthToken();
   const queryClient = useQueryClient();
@@ -94,7 +96,7 @@ const Settings = () => {
         {
           firstname: form.firstname,
           lastname: form.lastname,
-          phoneNumber: form.phoneNumber.trim() ? form.phoneNumber : undefined,
+          phoneNumber: form.phoneNumber.trim() ? normalizeThaiPhone(form.phoneNumber) : undefined,
           email: form.email,
         },
         token,

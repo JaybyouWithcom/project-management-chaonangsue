@@ -4,7 +4,7 @@ CREATE TABLE users (
     lastname VARCHAR(100) NOT NULL,
     username VARCHAR(100) NOT NULL UNIQUE,
     email VARCHAR(150) NOT NULL UNIQUE,
-    phone_number VARCHAR(20) NULL,
+    phone_number VARCHAR(20) NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     role ENUM('Customer','Admin','Banned') DEFAULT 'Customer',
     balance DECIMAL(10,2) DEFAULT 1000.00,

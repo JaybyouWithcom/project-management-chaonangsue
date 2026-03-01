@@ -1,18 +1,5 @@
 SET @db_name = DATABASE();
 
-SET @drop_phone_unique_sql = IF(
-  (SELECT COUNT(*)
-   FROM information_schema.statistics
-   WHERE table_schema = @db_name
-     AND table_name = 'users'
-     AND index_name = 'phone_number') > 0,
-  'ALTER TABLE users DROP INDEX phone_number',
-  'SELECT 1'
-);
-PREPARE stmt_drop_phone_unique FROM @drop_phone_unique_sql;
-EXECUTE stmt_drop_phone_unique;
-DEALLOCATE PREPARE stmt_drop_phone_unique;
-
 ALTER TABLE users
 MODIFY COLUMN phone_number VARCHAR(20) NULL;
 
@@ -43,3 +30,17 @@ SET @add_email_unique_sql = IF(
 PREPARE stmt_add_email_unique FROM @add_email_unique_sql;
 EXECUTE stmt_add_email_unique;
 DEALLOCATE PREPARE stmt_add_email_unique;
+
+SET @add_phone_unique_sql = IF(
+  (SELECT COUNT(*)
+   FROM information_schema.statistics
+   WHERE table_schema = @db_name
+     AND table_name = 'users'
+     AND index_name IN ('phone_number', 'uq_users_phone_number')
+     AND non_unique = 0) > 0,
+  'SELECT 1',
+  'ALTER TABLE users ADD CONSTRAINT uq_users_phone_number UNIQUE (phone_number)'
+);
+PREPARE stmt_add_phone_unique FROM @add_phone_unique_sql;
+EXECUTE stmt_add_phone_unique;
+DEALLOCATE PREPARE stmt_add_phone_unique;

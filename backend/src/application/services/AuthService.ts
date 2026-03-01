@@ -15,7 +15,7 @@ import { AppError } from '../../shared/errors/AppError.js';
 import type { AuthJwtPayload } from '../../shared/types/auth.js';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const phoneRegex = /^\d{9,10}$/;
+const thaiPhoneRegex = /^0\d{9}$/;
 type VerificationMethod = 'email' | 'phone';
 
 interface RegisterInput {
@@ -100,21 +100,29 @@ const generateOtp = (): string => String(Math.floor(100000 + Math.random() * 900
 
 const readSmtpCode = (response: string): number => Number(response.slice(0, 3));
 
+const normalizePhoneNumber = (phoneNumber?: string | null): string | null => {
+  if (!phoneNumber?.trim()) {
+    return null;
+  }
+  const digitsOnly = phoneNumber.replace(/[^0-9]/g, '');
+  return digitsOnly || null;
+};
+
 export class AuthService {
   constructor(private readonly userRepository: UserRepository) {}
 
   async register(input: RegisterInput): Promise<RegisterResponse> {
     const email = input.email.trim().toLowerCase();
-    const phoneNumber = input.phoneNumber?.trim() ? input.phoneNumber.trim() : undefined;
+    const phoneNumber = normalizePhoneNumber(input.phoneNumber);
 
     if (!emailRegex.test(email)) {
       throw new AppError('กรุณากรอกอีเมลในรูปแบบที่ถูกต้อง เช่น user@example.com', 400);
     }
-    if (phoneNumber && !phoneRegex.test(phoneNumber)) {
-      throw new AppError('เบอร์โทรศัพท์ต้องเป็นตัวเลข 9-10 หลักเท่านั้น', 400);
+    if (phoneNumber && !thaiPhoneRegex.test(phoneNumber)) {
+      throw new AppError('เบอร์โทรต้องเป็นรูปแบบไทย: 0 ตามด้วยตัวเลขอีก 9 หลัก (เช่น 0812345678)', 400);
     }
 
-    await this.assertUniqueness({ ...input, email, phoneNumber });
+    await this.assertUniqueness({ ...input, email, phoneNumber: phoneNumber ?? undefined });
 
     const passwordHash = await bcrypt.hash(input.password, env.auth.bcryptSaltRounds);
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -137,7 +145,7 @@ export class AuthService {
         input.lastname.trim(),
         input.username.trim(),
         email,
-        phoneNumber ?? null,
+        phoneNumber,
         passwordHash,
         expiresAt,
       ],
@@ -146,7 +154,7 @@ export class AuthService {
     return {
       pendingSignupId: result.insertId,
       email,
-      phoneNumber: phoneNumber ?? null,
+      phoneNumber,
       requiresVerification: true,
     };
   }
@@ -243,7 +251,7 @@ export class AuthService {
       });
     } catch (error) {
       if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ER_DUP_ENTRY') {
-        throw new AppError('อีเมล หรือ Username นี้ถูกใช้งานแล้ว', 409);
+        throw new AppError('อีเมล, Username หรือเบอร์โทรนี้ถูกใช้งานแล้ว', 409);
       }
       throw error;
     }
@@ -300,16 +308,23 @@ export class AuthService {
       throw new AppError('อีเมลนี้ถูกใช้งานแล้วในบัญชีอื่น', 409);
     }
 
-    const phoneNumber = input.phoneNumber?.trim() ? input.phoneNumber.trim() : null;
-    if (phoneNumber && !phoneRegex.test(phoneNumber)) {
-      throw new AppError('เบอร์โทรศัพท์ต้องเป็นตัวเลข 9-10 หลักเท่านั้น', 400);
+    const phoneNumber = normalizePhoneNumber(input.phoneNumber);
+    if (phoneNumber && !thaiPhoneRegex.test(phoneNumber)) {
+      throw new AppError('เบอร์โทรต้องเป็นรูปแบบไทย: 0 ตามด้วยตัวเลขอีก 9 หลัก (เช่น 0812345678)', 400);
+    }
+
+    if (phoneNumber) {
+      const existingByPhone = await this.userRepository.findByPhoneNumber(phoneNumber);
+      if (existingByPhone && existingByPhone.userId !== input.userId) {
+        throw new AppError('เบอร์โทรนี้ถูกใช้งานแล้วในบัญชีอื่น', 409);
+      }
     }
 
     const updated = await this.userRepository.updateProfileById(input.userId, {
       firstname: input.firstname.trim(),
       lastname: input.lastname.trim(),
       email,
-      phoneNumber,
+      phoneNumber: phoneNumber ?? null,
     });
 
     return toPublicUser(updated);
@@ -447,6 +462,18 @@ export class AuthService {
     const existingByUsername = await this.userRepository.findByUsername(input.username);
     if (existingByUsername) {
       throw new AppError('Username นี้ถูกใช้งานแล้ว', 409);
+    }
+
+    const normalizedPhoneNumber = normalizePhoneNumber(input.phoneNumber);
+    if (normalizedPhoneNumber) {
+      if (!thaiPhoneRegex.test(normalizedPhoneNumber)) {
+        throw new AppError('เบอร์โทรต้องเป็นรูปแบบไทย: 0 ตามด้วยตัวเลขอีก 9 หลัก (เช่น 0812345678)', 400);
+      }
+
+      const existingByPhone = await this.userRepository.findByPhoneNumber(normalizedPhoneNumber);
+      if (existingByPhone) {
+        throw new AppError('เบอร์โทรนี้ถูกใช้งานแล้ว', 409);
+      }
     }
   }
 }

@@ -39,6 +39,44 @@ export class AuthController {
     sendSuccess(res, result, 201);
   };
 
+  requestOtp = async (req: Request, res: Response): Promise<void> => {
+    const { pendingSignupId, method } = req.body as Record<string, unknown>;
+    const parsedPendingSignupId = Number(pendingSignupId);
+    if (!Number.isInteger(parsedPendingSignupId)) {
+      throw new AppError('Invalid pendingSignupId', 400);
+    }
+    if (method !== 'email' && method !== 'phone') {
+      throw new AppError('method must be email or phone', 400);
+    }
+
+    const result = await this.authService.requestOtp({
+      pendingSignupId: parsedPendingSignupId,
+      method,
+    });
+    sendSuccess(res, result);
+  };
+
+  verifyOtp = async (req: Request, res: Response): Promise<void> => {
+    const { pendingSignupId, method, otp } = req.body as Record<string, unknown>;
+    const parsedPendingSignupId = Number(pendingSignupId);
+    if (!Number.isInteger(parsedPendingSignupId)) {
+      throw new AppError('Invalid pendingSignupId', 400);
+    }
+    if (method !== 'email' && method !== 'phone') {
+      throw new AppError('method must be email or phone', 400);
+    }
+    if (!isNonEmptyString(otp)) {
+      throw new AppError('Missing OTP', 400);
+    }
+
+    const result = await this.authService.verifyOtp({
+      pendingSignupId: parsedPendingSignupId,
+      method,
+      otp,
+    });
+    sendSuccess(res, result);
+  };
+
   login = async (req: Request, res: Response): Promise<void> => {
     const { login, password } = req.body as Record<string, unknown>;
 

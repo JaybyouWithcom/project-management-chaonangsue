@@ -19,6 +19,13 @@ interface AuthResponse {
   token: string;
 }
 
+interface RegisterResponse {
+  pendingSignupId: number;
+  email: string;
+  phoneNumber: string | null;
+  requiresVerification: true;
+}
+
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^\d{9,10}$/;
 
@@ -80,14 +87,19 @@ const AuthPage = () => {
 
     setSubmitting(true);
     try {
-      const result = await apiPost<AuthResponse>('/api/auth/register', {
+      const result = await apiPost<RegisterResponse>('/api/auth/register', {
         ...registerForm,
         email: normalizedEmail,
         phoneNumber: normalizedPhone,
       });
-      setAuthToken(result.data.token);
-      toast({ title: `สมัครสมาชิกสำเร็จ (${result.data.user.username})` });
-      navigate('/browse');
+      toast({ title: "สมัครสมาชิกสำเร็จ" });
+      navigate('/auth/verify', {
+        state: {
+          pendingSignupId: result.data.pendingSignupId,
+          email: result.data.email,
+          phoneNumber: result.data.phoneNumber,
+        },
+      });
     } catch (error) {
       toast({
         title: 'สมัครสมาชิกไม่สำเร็จ',

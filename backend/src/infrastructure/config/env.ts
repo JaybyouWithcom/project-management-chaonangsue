@@ -29,5 +29,11 @@ export const env = {
     jwtSecret: requireEnv('JWT_SECRET'),
     jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
     bcryptSaltRounds: Number(process.env.BCRYPT_SALT_ROUNDS ?? 12),
+    otpSecret: process.env.OTP_SECRET ?? requireEnv('JWT_SECRET'),
+  },
+  smtp: {
+    user: process.env.SMTP_USER ?? '',
+    appPassword: process.env.SMTP_APP_PASSWORD ?? '',
+    fromEmail: process.env.SMTP_FROM_EMAIL ?? '',
   },
 };

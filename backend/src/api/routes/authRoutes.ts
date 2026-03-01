@@ -17,6 +17,14 @@ export const buildAuthRoutes = (
     authController.login(req, res).catch(next);
   });
 
+  router.post('/verification/request-otp', (req, res, next) => {
+    authController.requestOtp(req, res).catch(next);
+  });
+
+  router.post('/verification/verify-otp', (req, res, next) => {
+    authController.verifyOtp(req, res).catch(next);
+  });
+
   router.get('/me', authMiddleware, (req, res, next) => {
     authController.me(req, res).catch(next);
   });

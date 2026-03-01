@@ -55,6 +55,20 @@ interface ApiRental {
   paymentStatus: "รอชำระ" | "ชำระแล้ว" | "ยกเลิก";
 }
 
+type InventoryFilter = "all" | "rented" | "not-rented";
+
+interface InventoryBookItem {
+  bookId: number;
+  title: string;
+  imagePath: string;
+  author: string;
+  bookPrice: string | null;
+  bookCondition: string | null;
+  hasBeenRented: boolean;
+  isCurrentlyRented: boolean;
+  sourceBook: ApiBook | null;
+}
+
 // เพิ่ม Interface สำหรับ Shop
 interface ApiShop {
   shopId: number;
@@ -78,6 +92,7 @@ const StoreDashboard = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [bookSearch, setBookSearch] = useState("");
+  const [inventoryFilter, setInventoryFilter] = useState<InventoryFilter>("all");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [bookDialogOpen, setBookDialogOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<ApiBook | null>(null);
@@ -148,10 +163,74 @@ const StoreDashboard = () => {
   const activeRentals = rentals.filter(o => o.status !== "คืนแล้ว").length;
   const overdueCount = rentals.filter(o => o.status === "เลยกำหนด").length;
 
-  const filteredBooks = useMemo(() => books.filter((b) =>
-    b.title.toLowerCase().includes(bookSearch.toLowerCase()) ||
-    b.author.toLowerCase().includes(bookSearch.toLowerCase()),
-  ), [books, bookSearch]);
+  const inventoryBooks = useMemo<InventoryBookItem[]>(() => {
+    const rentalsByBookId = new Map<number, { hasBeenRented: boolean; isCurrentlyRented: boolean; rental: ApiRental }>();
+    for (const rental of rentals) {
+      const current = rentalsByBookId.get(rental.bookId);
+      rentalsByBookId.set(rental.bookId, {
+        hasBeenRented: true,
+        isCurrentlyRented: current?.isCurrentlyRented ?? rental.status !== "คืนแล้ว",
+        rental,
+      });
+    }
+
+    const itemsFromBooks = books.map((book) => {
+      const rentalMeta = rentalsByBookId.get(book.bookId);
+      return {
+        bookId: book.bookId,
+        title: book.title,
+        imagePath: book.imagePath,
+        author: book.author,
+        bookPrice: book.bookPrice,
+        bookCondition: book.bookCondition,
+        hasBeenRented: Boolean(rentalMeta?.hasBeenRented),
+        isCurrentlyRented: Boolean(rentalMeta?.isCurrentlyRented),
+        sourceBook: book,
+      };
+    });
+
+    const itemsFromRentalsOnly = rentals
+      .filter((rental) => !books.some((book) => book.bookId === rental.bookId))
+      .reduce<InventoryBookItem[]>((acc, rental) => {
+        if (acc.some((item) => item.bookId === rental.bookId)) {
+          return acc;
+        }
+        acc.push({
+          bookId: rental.bookId,
+          title: rental.bookTitle,
+          imagePath: rental.bookCover,
+          author: "-",
+          bookPrice: null,
+          bookCondition: null,
+          hasBeenRented: true,
+          isCurrentlyRented: rental.status !== "คืนแล้ว",
+          sourceBook: null,
+        });
+        return acc;
+      }, []);
+
+    return [...itemsFromBooks, ...itemsFromRentalsOnly];
+  }, [books, rentals]);
+
+  const filteredBooks = useMemo(
+    () =>
+      inventoryBooks.filter((book) => {
+        const matchesSearch =
+          book.title.toLowerCase().includes(bookSearch.toLowerCase()) ||
+          book.author.toLowerCase().includes(bookSearch.toLowerCase());
+        if (!matchesSearch) {
+          return false;
+        }
+        if (inventoryFilter === "rented") {
+          return book.hasBeenRented;
+        }
+        if (inventoryFilter === "not-rented") {
+          return !book.hasBeenRented;
+        }
+        return true;
+      }),
+    [inventoryBooks, bookSearch, inventoryFilter],
+  );
 
   const handleSaveBook = async () => {
     const token = getAuthToken();
@@ -474,9 +553,21 @@ const StoreDashboard = () => {
 
           <TabsContent value="inventory">
             <div className="bg-card rounded-xl border p-4 md:p-6">
-              <div className="relative mb-4 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input className="pl-9" placeholder="ค้นหาชื่อหนังสือ/ผู้เขียน" value={bookSearch} onChange={(e) => setBookSearch(e.target.value)} />
+              <div className="mb-4 flex flex-wrap items-center gap-3">
+                <div className="relative max-w-sm flex-1 min-w-[220px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-9" placeholder="ค้นหาชื่อหนังสือ/ผู้เขียน" value={bookSearch} onChange={(e) => setBookSearch(e.target.value)} />
+                </div>
+                <Select value={inventoryFilter} onValueChange={(value) => setInventoryFilter(value as InventoryFilter)}>
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="กรองสถานะการยืม" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">ทั้งหมด</SelectItem>
+                    <SelectItem value="rented">ถูกยืมแล้ว</SelectItem>
+                    <SelectItem value="not-rented">ยังไม่ถูกยืม</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-3">
                 {filteredBooks.map((book) => (
@@ -485,21 +576,31 @@ const StoreDashboard = () => {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{book.title}</p>
                       <p className="text-sm text-muted-foreground truncate">{book.author}</p>
-                      <p className="text-xs text-muted-foreground">ราคาหนังสือ ฿{book.bookPrice}</p>
-                      <p className="text-xs text-muted-foreground">สภาพหนังสือ: {normalizeConditionLabel(book.bookCondition)}</p>
+                      <p className="text-xs text-muted-foreground">ราคาหนังสือ {book.bookPrice ? `฿${book.bookPrice}` : "-"}</p>
+                      <p className="text-xs text-muted-foreground">สภาพหนังสือ: {book.bookCondition ? normalizeConditionLabel(book.bookCondition) : "-"}</p>
                     </div>
-                    <Badge variant={book.status === 'Available' ? 'default' : 'secondary'}>{book.status}</Badge>
-                    <Button variant="ghost" size="icon" onClick={() => openEditBookDialog(book)}><Edit className="h-4 w-4" /></Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setDeletingBook(book);
-                        setDeleteBookConfirm("");
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    {book.isCurrentlyRented ? (
+                      <Badge className="bg-warning text-warning-foreground border-0">ยืมแล้ว</Badge>
+                    ) : (
+                      <Badge variant="default">ว่าง</Badge>
+                    )}
+                    {book.sourceBook ? (
+                      <>
+                        <Button variant="ghost" size="icon" onClick={() => openEditBookDialog(book.sourceBook)}><Edit className="h-4 w-4" /></Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setDeletingBook(book.sourceBook);
+                            setDeleteBookConfirm("");
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">ไม่สามารถแก้ไขได้ขณะกำลังถูกยืม</span>
+                    )}
                   </div>
                 ))}
               </div>

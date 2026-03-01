@@ -1,9 +1,12 @@
+import { useMemo, useState } from "react";
 import { Clock, Package, BookOpen, AlertTriangle, CheckCircle, Calendar } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
@@ -52,10 +55,21 @@ interface RentalOrder {
   paymentStatus: "รอชำระ" | "ชำระแล้ว" | "ยกเลิก";
 }
 
+interface LibraryBook {
+  bookId: number;
+  title: string;
+  author: string;
+  imagePath: string;
+}
+
+type LibraryFilter = "all" | "rented" | "not-rented";
+
 const CustomerDashboard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const token = getAuthToken();
+  const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>("all");
+
   const { data: orders = [] } = useQuery({
     queryKey: ["my-rentals"],
     enabled: Boolean(token),
@@ -64,9 +78,60 @@ const CustomerDashboard = () => {
       return response.data.rentals;
     },
   });
+  const { data: availableBooks = [] } = useQuery({
+    queryKey: ["library-available-books"],
+    enabled: Boolean(token),
+    queryFn: async () => {
+      const response = await apiGet<{ books: LibraryBook[] }>("/api/books?limit=100");
+      return response.data.books;
+    },
+  });
 
   const activeOrders = orders.filter((o) => !["คืนแล้ว"].includes(o.status));
   const historyOrders = orders.filter((o) => o.status === "คืนแล้ว");
+  const libraryBooks = useMemo(() => {
+    const rentedByBookId = new Map<number, RentalOrder>();
+    for (const order of orders) {
+      if (!rentedByBookId.has(order.bookId)) {
+        rentedByBookId.set(order.bookId, order);
+      }
+    }
+
+    const fromAvailable = availableBooks.map((book) => {
+      const rentedOrder = rentedByBookId.get(book.bookId);
+      return {
+        bookId: book.bookId,
+        title: book.title,
+        author: book.author,
+        imagePath: book.imagePath,
+        isRented: Boolean(rentedOrder),
+        canOpenDetail: true,
+      };
+    });
+
+    const fromRentedOnly = Array.from(rentedByBookId.values())
+      .filter((order) => !availableBooks.some((book) => book.bookId === order.bookId))
+      .map((order) => ({
+        bookId: order.bookId,
+        title: order.bookTitle,
+        author: "หนังสือที่เคยยืม",
+        imagePath: order.bookCover,
+        isRented: true,
+        canOpenDetail: false,
+      }));
+
+    return [...fromAvailable, ...fromRentedOnly];
+  }, [availableBooks, orders]);
+
+  const filteredLibraryBooks = useMemo(() => {
+    if (libraryFilter === "rented") {
+      return libraryBooks.filter((book) => book.isRented);
+    }
+    if (libraryFilter === "not-rented") {
+      return libraryBooks.filter((book) => !book.isRented);
+    }
+    return libraryBooks;
+  }, [libraryBooks, libraryFilter]);
 
   const handlePayFine = async (rentalId: number) => {
     if (!token) {
@@ -127,6 +192,7 @@ const CustomerDashboard = () => {
           <TabsList className="mb-6">
             <TabsTrigger value="active">คำสั่งเช่าปัจจุบัน ({activeOrders.length})</TabsTrigger>
             <TabsTrigger value="history">ประวัติ ({historyOrders.length})</TabsTrigger>
+            <TabsTrigger value="library">คลังหนังสือ ({libraryBooks.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="active" className="space-y-4">
@@ -205,6 +271,61 @@ const CustomerDashboard = () => {
                 </div>
               </div>
             ))}
+          </TabsContent>
+
+          <TabsContent value="library" className="space-y-4">
+            <div className="flex justify-end">
+              <Select value={libraryFilter} onValueChange={(value) => setLibraryFilter(value as LibraryFilter)}>
+                <SelectTrigger className="w-56">
+                  <SelectValue placeholder="กรองหนังสือ" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">แสดงทั้งหมด</SelectItem>
+                  <SelectItem value="rented">ถูกยืมแล้ว</SelectItem>
+                  <SelectItem value="not-rented">ยังไม่ถูกยืม</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {filteredLibraryBooks.length === 0 ? (
+              <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">
+                ไม่พบหนังสือตามตัวกรองที่เลือก
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredLibraryBooks.map((book) => (
+                  <div
+                    key={book.bookId}
+                    className={`rounded-xl overflow-hidden border bg-card transition-all duration-300 ${book.canOpenDetail ? "hover:shadow-lg hover:-translate-y-1" : "opacity-90"}`}
+                  >
+                    <div className="relative aspect-[3/4] overflow-hidden">
+                      <img
+                        src={resolveImageUrl(book.imagePath)}
+                        alt={book.title}
+                        className={`w-full h-full object-cover ${book.canOpenDetail ? "transition-transform duration-500 hover:scale-105" : ""}`}
+                        loading="lazy"
+                      />
+                      {book.isRented && (
+                        <Badge className="absolute top-2 right-2 bg-warning text-warning-foreground border-0">
+                          ยืมแล้ว
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="p-3">
+                      <p className="font-semibold line-clamp-1">{book.title}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-1">{book.author}</p>
+                      {book.canOpenDetail ? (
+                        <Link to={`/book/${book.bookId}`} className="mt-2 inline-block text-sm text-primary underline underline-offset-2">
+                          ดูรายละเอียด
+                        </Link>
+                      ) : (
+                        <p className="mt-2 text-xs text-muted-foreground">เล่มนี้ไม่พร้อมให้ดูรายละเอียดในขณะนี้</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>

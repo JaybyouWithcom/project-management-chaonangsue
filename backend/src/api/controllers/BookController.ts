@@ -41,6 +41,25 @@ const saveImageFromDataUrl = async (imageBase64: string): Promise<string> => {
   return `/uploads/books/${filename}`;
 };
 
+const saveReturnProofFromDataUrl = async (imageBase64: string): Promise<string> => {
+  const matched = imageBase64.match(/^data:(image\/(png|jpeg|jpg|webp));base64,(.+)$/);
+  if (!matched) {
+    throw new AppError('รูปหลักฐานต้องเป็น base64 data URL (png/jpeg/webp)', 400);
+  }
+
+  const mime = matched[1];
+  const data = matched[3];
+
+  const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+  const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
+  const uploadsDir = path.resolve(process.cwd(), 'uploads', 'returns');
+
+  await fs.mkdir(uploadsDir, { recursive: true });
+  await fs.writeFile(path.join(uploadsDir, filename), Buffer.from(data, 'base64'));
+
+  return `/uploads/returns/${filename}`;
+};
+
 export class BookController {
   constructor(private readonly bookService: BookService) {}
 
@@ -267,6 +286,56 @@ export class BookController {
     }
 
     const result = await this.bookService.payFine({
+      userId: req.auth.userId,
+      rentalId,
+    });
+    sendSuccess(res, result);
+  };
+
+  requestReturn = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const rentalId = Number(req.params.rentalId);
+    if (!Number.isInteger(rentalId)) {
+      throw new AppError('Invalid rentalId', 400);
+    }
+
+    const { deliveryProofImageBase64, deliverySentAt } = req.body as Record<string, unknown>;
+    if (!isNonEmptyString(deliveryProofImageBase64)) {
+      throw new AppError('กรุณาแนบรูปหลักฐานการส่งคืน', 400);
+    }
+    if (!isNonEmptyString(deliverySentAt)) {
+      throw new AppError('กรุณาระบุเวลาที่จัดส่งคืน', 400);
+    }
+
+    const parsedDeliverySentAt = new Date(deliverySentAt);
+    if (Number.isNaN(parsedDeliverySentAt.getTime())) {
+      throw new AppError('รูปแบบเวลาจัดส่งคืนไม่ถูกต้อง', 400);
+    }
+
+    const deliveryProofPath = await saveReturnProofFromDataUrl(deliveryProofImageBase64);
+    const result = await this.bookService.requestReturn({
+      userId: req.auth.userId,
+      rentalId,
+      deliveryProofPath,
+      deliverySentAt: parsedDeliverySentAt,
+    });
+    sendSuccess(res, result);
+  };
+
+  confirmReturnByShop = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const rentalId = Number(req.params.rentalId);
+    if (!Number.isInteger(rentalId)) {
+      throw new AppError('Invalid rentalId', 400);
+    }
+
+    const result = await this.bookService.confirmReturnByShop({
       userId: req.auth.userId,
       rentalId,
     });

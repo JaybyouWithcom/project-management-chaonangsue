@@ -193,8 +193,8 @@ SET @ensure_status_sql = IF(
    WHERE table_schema = @db_name
      AND table_name = 'rentals'
      AND column_name = 'status') = 0,
-  "ALTER TABLE rentals ADD COLUMN status ENUM('รอจัดส่ง','จัดส่งแล้ว','ได้รับหนังสือแล้ว','กำลังยืม','คืนแล้ว','เลยกำหนด') NOT NULL DEFAULT 'กำลังยืม'",
-  "ALTER TABLE rentals MODIFY COLUMN status ENUM('รอจัดส่ง','จัดส่งแล้ว','ได้รับหนังสือแล้ว','กำลังยืม','คืนแล้ว','เลยกำหนด') NOT NULL DEFAULT 'กำลังยืม'"
+  "ALTER TABLE rentals ADD COLUMN status ENUM('รอจัดส่ง','จัดส่งแล้ว','ได้รับหนังสือแล้ว','กำลังยืม','รอคืน','คืนแล้ว','เลยกำหนด') NOT NULL DEFAULT 'กำลังยืม'",
+  "ALTER TABLE rentals MODIFY COLUMN status ENUM('รอจัดส่ง','จัดส่งแล้ว','ได้รับหนังสือแล้ว','กำลังยืม','รอคืน','คืนแล้ว','เลยกำหนด') NOT NULL DEFAULT 'กำลังยืม'"
 );
 PREPARE stmt_ensure_status FROM @ensure_status_sql;
 EXECUTE stmt_ensure_status;
@@ -254,5 +254,5 @@ EXECUTE stmt_drop_penalty;
 DEALLOCATE PREPARE stmt_drop_penalty;
 
 ALTER TABLE rentals
-MODIFY COLUMN status ENUM('กำลังยืม', 'คืนแล้ว', 'เลยกำหนด') NOT NULL DEFAULT 'กำลังยืม',
+MODIFY COLUMN status ENUM('กำลังยืม', 'รอคืน', 'คืนแล้ว', 'เลยกำหนด') NOT NULL DEFAULT 'กำลังยืม',
 MODIFY COLUMN payment_status ENUM('ชำระแล้ว','รอชำระ','ยกเลิก') NOT NULL DEFAULT 'ชำระแล้ว';

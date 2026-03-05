@@ -36,6 +36,29 @@ const getDaysRemaining = (endDate: string) => {
   return Math.ceil(diff / 86400000);
 };
 
+const toLocalDateTimeInputValue = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+const fileToDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+    };
+    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+    reader.readAsDataURL(file);
+  });
+
 interface RentalOrder {
   rentalId: number;
   bookId: number;
@@ -49,13 +72,17 @@ interface RentalOrder {
   startDate: string;
   endDate: string;
   rentalPrice: number;
-  status: "กำลังยืม" | "คืนแล้ว" | "เลยกำหนด";
+  depositPrice: number;
+  status: "กำลังยืม" | "รอคืน" | "คืนแล้ว" | "เลยกำหนด";
   totalPrice: number;
   pastDueDays: number;
   fineAmountDue: number;
   fineAmountTotal: number;
   finePaidAt: string | null;
   paymentStatus: "รอชำระ" | "ชำระแล้ว" | "ยกเลิก";
+  returnRequestedAt: string | null;
+  returnDeliverySentAt: string | null;
+  returnDeliveryProofPath: string | null;
 }
 
 interface LibraryBook {
@@ -72,6 +99,10 @@ const CustomerDashboard = () => {
   const { toast } = useToast();
   const token = getAuthToken();
   const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>("all");
+  const [returningRentalId, setReturningRentalId] = useState<number | null>(null);
+  const [returnProofFile, setReturnProofFile] = useState<File | null>(null);
+  const [returnSentAt, setReturnSentAt] = useState<string>(toLocalDateTimeInputValue(new Date()));
+  const [submittingReturn, setSubmittingReturn] = useState(false);
 
   const { data: orders = [] } = useQuery({
     queryKey: ["my-rentals"],
@@ -166,6 +197,50 @@ const CustomerDashboard = () => {
     }
   };
 
+  const handleSubmitReturn = async (rentalId: number) => {
+    if (!token) {
+      return;
+    }
+    if (!returnProofFile) {
+      toast({
+        title: "กรุณาแนบรูปหลักฐาน",
+        description: "ต้องแนบรูปใบเสร็จ/หลักฐานการส่งคืนก่อนยืนยัน",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!returnSentAt) {
+      toast({
+        title: "กรุณาระบุเวลาที่จัดส่งคืน",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSubmittingReturn(true);
+    try {
+      const deliveryProofImageBase64 = await fileToDataUrl(returnProofFile);
+      await apiPost(`/api/books/rentals/${rentalId}/return`, {
+        deliveryProofImageBase64,
+        deliverySentAt: new Date(returnSentAt).toISOString(),
+      }, token);
+
+      toast({ title: "ส่งคำขอคืนหนังสือแล้ว" });
+      setReturningRentalId(null);
+      setReturnProofFile(null);
+      setReturnSentAt(toLocalDateTimeInputValue(new Date()));
+      await queryClient.invalidateQueries({ queryKey: ["my-rentals"] });
+    } catch (error) {
+      toast({
+        title: "ส่งคำขอคืนไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingReturn(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -202,6 +277,7 @@ const CustomerDashboard = () => {
             {activeOrders.map((order) => {
               const Icon = statusIcons[order.status];
               const daysLeft = getDaysRemaining(order.endDate);
+              const canRequestReturn = order.status === "กำลังยืม" && new Date(order.endDate).getTime() >= Date.now();
               return (
                 <div key={order.rentalId} className="bg-card rounded-xl border p-4 md:p-6 flex flex-col md:flex-row gap-4">
                   <img src={resolveImageUrl(order.bookCover)} alt={order.bookTitle} className="w-20 h-28 rounded-lg object-cover shrink-0" />
@@ -248,6 +324,83 @@ const CustomerDashboard = () => {
                         )}
                       </div>
                     )}
+                    {order.status === "รอคืน" && (
+                      <div className="bg-accent/10 rounded-lg p-3 text-sm space-y-1">
+                        <p className="font-semibold">ส่งคำขอคืนแล้ว กำลังรอร้านยืนยัน</p>
+                        {order.returnDeliverySentAt && (
+                          <p className="text-muted-foreground">
+                            เวลาจัดส่งคืน: {new Date(order.returnDeliverySentAt).toLocaleString()}
+                          </p>
+                        )}
+                        {order.returnDeliveryProofPath && (
+                          <a
+                            href={resolveImageUrl(order.returnDeliveryProofPath)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary underline underline-offset-2"
+                          >
+                            ดูหลักฐานการส่งคืน
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    {canRequestReturn && (
+                      <div className="space-y-3 rounded-lg border p-3">
+                        {returningRentalId !== order.rentalId ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setReturningRentalId(order.rentalId);
+                              setReturnProofFile(null);
+                              setReturnSentAt(toLocalDateTimeInputValue(new Date()));
+                            }}
+                          >
+                            คืนหนังสือ
+                          </Button>
+                        ) : (
+                          <div className="space-y-3">
+                            <div>
+                              <p className="text-sm font-medium mb-1">หลักฐานการส่งคืน</p>
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                onChange={(event) => setReturnProofFile(event.target.files?.[0] ?? null)}
+                              />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium mb-1">เวลาที่จัดส่งคืน</p>
+                              <input
+                                type="datetime-local"
+                                value={returnSentAt}
+                                onChange={(event) => setReturnSentAt(event.target.value)}
+                                className="border rounded-md px-2 py-1 bg-background"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => { void handleSubmitReturn(order.rentalId); }}
+                                disabled={submittingReturn}
+                              >
+                                {submittingReturn ? "กำลังส่ง..." : "ยืนยันส่งคืน"}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setReturningRentalId(null);
+                                  setReturnProofFile(null);
+                                }}
+                                disabled={submittingReturn}
+                              >
+                                ยกเลิก
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -269,6 +422,9 @@ const CustomerDashboard = () => {
                   <div className="flex gap-4 text-sm text-muted-foreground mt-2">
                     <span>{new Date(order.startDate).toLocaleDateString()} — {new Date(order.endDate).toLocaleDateString()}</span>
                     <span>฿{order.totalPrice}</span>
+                  </div>
+                  <div className="mt-2 text-sm">
+                    <span className="text-success font-medium">คืนมัดจำแล้ว: ฿{order.depositPrice}</span>
                   </div>
                   <Button variant="outline" size="sm" className="mt-3">เช่าอีกครั้ง</Button>
                 </div>

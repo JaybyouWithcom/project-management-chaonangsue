@@ -1,4 +1,4 @@
-import type { RowDataPacket } from 'mysql2';
+import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 import type { Book, RentalPlan } from '../../domain/entities/Book.js';
 import type { BookRepository } from '../../domain/repositories/BookRepository.js';
@@ -59,6 +59,7 @@ const toMoney = (value: number): number => Math.round(value * 100) / 100;
 interface BookForRentRow extends RowDataPacket {
   book_id: number;
   owner_id: number;
+  title: string;
   book_price: string;
   status: 'Available' | 'Rented';
 }
@@ -276,7 +277,7 @@ export class BookService {
       await connection.beginTransaction();
 
       const [bookRows] = await connection.query<Array<BookForRentRow & { shop_id: number | null }>>(
-        'SELECT book_id, owner_id, shop_id, book_price, status FROM books WHERE book_id = ? FOR UPDATE',
+        'SELECT book_id, owner_id, shop_id, title, book_price, status FROM books WHERE book_id = ? FOR UPDATE',
         [input.bookId],
       );
 
@@ -318,7 +319,7 @@ export class BookService {
       const now = new Date();
       const dueDate = new Date(now);
       dueDate.setDate(dueDate.getDate() + planDaysMap[input.plan]);
-      await connection.query(
+      const [rentalResult] = await connection.query<ResultSetHeader>(
         `
         INSERT INTO rentals (
           book_id,
@@ -352,6 +353,14 @@ export class BookService {
           depositPrice,
           totalAmount,
         ],
+      );
+
+      await connection.query(
+        `
+        INSERT INTO wallet_transactions (user_id, transaction_type, amount, description, reference_id)
+        VALUES (?, 'RENTAL', ?, ?, ?)
+        `,
+        [input.userId, -totalAmount, `เช่าหนังสือ: ${book.title}`, rentalResult.insertId],
       );
 
       await connection.commit();

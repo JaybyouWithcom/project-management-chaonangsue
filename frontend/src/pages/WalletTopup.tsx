@@ -219,6 +219,7 @@ const WalletTopupPage = () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["auth-me"] }),
         queryClient.invalidateQueries({ queryKey: ["wallet-me"] }),
+        queryClient.invalidateQueries({ queryKey: ["wallet-transactions", token] }),
         queryClient.invalidateQueries({ queryKey: ["wallet-topup-me", token] }),
         queryClient.invalidateQueries({ queryKey: ["settings-me", token] }),
       ]);

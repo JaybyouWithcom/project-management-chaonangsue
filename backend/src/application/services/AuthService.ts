@@ -115,6 +115,22 @@ export interface TopUpWalletResponse {
   method: string;
 }
 
+interface WalletTransactionRow extends RowDataPacket {
+  transaction_id: number;
+  transaction_type: 'TOPUP' | 'RENTAL';
+  amount: string;
+  description: string;
+  created_at: Date;
+}
+
+export interface WalletTransactionItem {
+  transactionId: number;
+  type: 'TOPUP' | 'RENTAL';
+  amount: number;
+  description: string;
+  createdAt: string;
+}
+
 const hashOtp = (otp: string): string =>
   crypto.createHash('sha256').update(`${otp}:${env.auth.otpSecret}`).digest('hex');
 
@@ -482,7 +498,36 @@ export class AuthService {
 
     const normalizedAmount = Math.round(amount * 100) / 100;
     const updatedUser = await this.userRepository.incrementBalanceById(input.userId, normalizedAmount);
+    await dbPool.query(
+      `
+      INSERT INTO wallet_transactions (user_id, transaction_type, amount, description)
+      VALUES (?, 'TOPUP', ?, ?)
+      `,
+      [input.userId, normalizedAmount, `เติมเงินผ่าน ${method}`],
+    );
+
     return { user: toPublicUser(updatedUser), amount: normalizedAmount, method };
+  }
+
+  async listWalletTransactions(userId: number, limit = 10): Promise<WalletTransactionItem[]> {
+    const [rows] = await dbPool.query<WalletTransactionRow[]>(
+      `
+      SELECT transaction_id, transaction_type, amount, description, created_at
+      FROM wallet_transactions
+      WHERE user_id = ?
+      ORDER BY created_at DESC, transaction_id DESC
+      LIMIT ?
+      `,
+      [userId, limit],
+    );
+
+    return rows.map((row) => ({
+      transactionId: row.transaction_id,
+      type: row.transaction_type,
+      amount: Number(row.amount),
+      description: row.description,
+      createdAt: row.created_at.toISOString(),
+    }));
   }
 
   verifyToken(token: string): AuthJwtPayload {

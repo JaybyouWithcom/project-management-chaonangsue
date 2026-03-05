@@ -49,5 +49,9 @@ export const buildAuthRoutes = (
     authController.topUpWallet(req, res).catch(next);
   });
 
+  router.get('/wallet/transactions', authMiddleware, (req, res, next) => {
+    authController.listWalletTransactions(req, res).catch(next);
+  });
+
   return router;
 };

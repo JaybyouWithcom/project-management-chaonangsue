@@ -137,6 +137,7 @@ const BookDetail = () => {
         description: `ยอดตัด ฿${result.data.totalAmount} • ยอดคงเหลือ ฿${result.data.balanceAfter}`,
       });
       await queryClient.invalidateQueries({ queryKey: ["auth-me"] });
+      await queryClient.invalidateQueries({ queryKey: ["wallet-transactions", token] });
       navigate("/browse");
     } catch (error) {
       toast({

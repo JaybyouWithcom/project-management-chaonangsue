@@ -184,4 +184,16 @@ export class AuthController {
 
     sendSuccess(res, result);
   };
+
+  listWalletTransactions = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const rawLimit = Number(req.query.limit ?? 10);
+    const limit = Number.isInteger(rawLimit) ? Math.min(50, Math.max(1, rawLimit)) : 10;
+
+    const transactions = await this.authService.listWalletTransactions(req.auth.userId, limit);
+    sendSuccess(res, { transactions });
+  };
 }

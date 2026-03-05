@@ -1,12 +1,14 @@
-import { Link } from "react-router-dom";
+﻿import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { 
-  Wallet as WalletIcon, 
-  PlusCircle, 
-  History, 
+import {
+  Wallet as WalletIcon,
+  PlusCircle,
+  History,
   CreditCard,
-  Ticket, // เพิ่มไอคอน Ticket สำหรับคูปอง
-  HelpCircle // เพิ่มไอคอนช่วยเหลือ
+  Ticket,
+  HelpCircle,
+  ArrowDownLeft,
+  ArrowUpRight,
 } from "lucide-react";
 
 import Navbar from "@/components/Navbar";
@@ -21,20 +23,46 @@ interface AuthUser {
   balance: string;
 }
 
+interface WalletTransaction {
+  transactionId: number;
+  type: "TOPUP" | "RENTAL";
+  amount: number;
+  description: string;
+  createdAt: string;
+}
+
 const currencyFormatter = new Intl.NumberFormat("th-TH", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
+const dateFormatter = new Intl.DateTimeFormat("th-TH", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
 const WalletPage = () => {
   const token = getAuthToken();
-  const { data: user, isLoading, isError } = useQuery({
+  const { data: user, isLoading } = useQuery({
     queryKey: ["wallet-me", token],
     enabled: Boolean(token),
     retry: false,
     queryFn: async () => {
       const response = await apiGet<{ user: AuthUser }>("/api/auth/me", token ?? undefined);
       return response.data.user;
+    },
+  });
+
+  const { data: transactions = [], isLoading: transactionsLoading } = useQuery({
+    queryKey: ["wallet-transactions", token],
+    enabled: Boolean(token),
+    retry: false,
+    queryFn: async () => {
+      const response = await apiGet<{ transactions: WalletTransaction[] }>(
+        "/api/auth/wallet/transactions?limit=8",
+        token ?? undefined,
+      );
+      return response.data.transactions;
     },
   });
 
@@ -46,10 +74,9 @@ const WalletPage = () => {
       <Navbar />
       <main className="container mx-auto px-4 py-8 md:py-12 flex-1">
         <div className="max-w-2xl mx-auto space-y-8">
-          
           <div className="flex flex-col gap-1">
             <h1 className="font-display text-3xl md:text-4xl font-bold text-slate-900 text-center md:text-left">วอลเล็ตของฉัน</h1>
-            <p className="text-muted-foreground text-center md:text-left">จัดการยอดเงินและตรวจสอบความเคลื่อนไหว</p>
+            <p className="text-muted-foreground text-center md:text-left">จัดการยอดเงินและตรวจสอบความเคลื่อนไหวล่าสุด</p>
           </div>
 
           {!token ? (
@@ -59,20 +86,21 @@ const WalletPage = () => {
                   <WalletIcon className="h-8 w-8" />
                 </div>
                 <h3 className="text-xl font-bold">เข้าสู่ระบบเพื่อใช้งานวอลเล็ต</h3>
-                <Button asChild size="lg" className="px-8 mt-4"><Link to="/auth">เข้าสู่ระบบ</Link></Button>
+                <Button asChild size="lg" className="px-8 mt-4">
+                  <Link to="/auth">เข้าสู่ระบบ</Link>
+                </Button>
               </CardContent>
             </Card>
           ) : isLoading ? (
             <div className="h-64 w-full bg-slate-200 animate-pulse rounded-[2rem]" />
           ) : (
             <div className="space-y-6">
-              {/* Virtual Card */}
               <section className="relative overflow-hidden group">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/90 to-blue-700 transition-all group-hover:scale-105 duration-500" />
                 <div className="absolute top-0 right-0 p-8 opacity-10">
                   <WalletIcon className="w-40 h-40" />
                 </div>
-                
+
                 <Card className="relative bg-transparent border-none text-white shadow-2xl shadow-primary/20 min-h-[220px] flex flex-col justify-between p-8 rounded-[2rem]">
                   <div className="flex justify-between items-start">
                     <div className="space-y-1">
@@ -90,19 +118,17 @@ const WalletPage = () => {
                   <div className="flex justify-between items-end pt-4 border-t border-white/10 mt-6">
                     <div className="text-xs text-blue-200/80">
                       <p>ChaoNangsue Wallet</p>
-                      <p className="font-mono mt-0.5">ID: {user?.userId.toString().padStart(6, '0')}</p>
+                      <p className="font-mono mt-0.5">ID: {user?.userId.toString().padStart(6, "0")}</p>
                     </div>
                     <div className="text-sm font-semibold tracking-widest opacity-40 italic">ChaoNangsue</div>
                   </div>
                 </Card>
               </section>
 
-              {/* Action Grid */}
               <div className="grid grid-cols-2 gap-4">
-                {/* ปุ่มหลัก: เติมเงิน (สีเขียว) */}
-                <Button 
-                  asChild 
-                  variant="outline" 
+                <Button
+                  asChild
+                  variant="outline"
                   className="h-28 rounded-2xl bg-white hover:bg-slate-50 border-slate-200 flex-col gap-2 shadow-sm transition-all hover:shadow-md hover:border-green-200 active:scale-95"
                 >
                   <Link to="/wallet/topup">
@@ -112,14 +138,13 @@ const WalletPage = () => {
                     <span className="font-bold text-slate-700">เติมเงิน</span>
                   </Link>
                 </Button>
-                
-                {/* ปุ่มใหม่: แลกโค้ด/คูปอง (สีน้ำเงิน) */}
-                <Button 
+
+                <Button
                   asChild
-                  variant="outline" 
+                  variant="outline"
                   className="h-28 rounded-2xl bg-white hover:bg-slate-50 border-slate-200 flex-col gap-2 shadow-sm transition-all hover:shadow-md hover:border-blue-200 active:scale-95"
                 >
-                  <Link to="/wallet"> {/* หรือลิงก์ไปหน้าแลกโค้ดที่คุณมี */}
+                  <Link to="/wallet">
                     <div className="p-2.5 bg-blue-100 text-blue-600 rounded-xl">
                       <Ticket className="h-7 w-7" />
                     </div>
@@ -128,7 +153,6 @@ const WalletPage = () => {
                 </Button>
               </div>
 
-              {/* Recent Transactions Table */}
               <Card className="rounded-3xl border-none shadow-sm overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between border-b bg-white px-6">
                   <CardTitle className="text-lg flex items-center gap-2 font-bold">
@@ -137,28 +161,62 @@ const WalletPage = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 bg-white">
-                  <div className="py-12 text-center space-y-2">
-                    <div className="bg-slate-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto text-slate-300">
-                      <History className="h-6 w-6" />
+                  {transactionsLoading ? (
+                    <div className="py-8 px-6 text-sm text-slate-500">กำลังโหลดรายการ...</div>
+                  ) : transactions.length === 0 ? (
+                    <div className="py-12 text-center space-y-2">
+                      <div className="bg-slate-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto text-slate-300">
+                        <History className="h-6 w-6" />
+                      </div>
+                      <p className="text-slate-500 text-sm font-medium">ยังไม่มีความเคลื่อนไหว</p>
                     </div>
-                    <p className="text-slate-500 text-sm font-medium">ยังไม่มีความเคลื่อนไหว</p>
-                  </div>
+                  ) : (
+                    <div>
+                      {transactions.map((transaction) => {
+                        const isTopup = transaction.type === "TOPUP";
+                        const amountLabel = `${isTopup ? "+" : ""}${currencyFormatter.format(transaction.amount)}`;
+
+                        return (
+                          <div
+                            key={transaction.transactionId}
+                            className="flex items-center justify-between gap-3 px-6 py-4 border-b last:border-b-0"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div
+                                className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                                  isTopup ? "bg-green-100 text-green-700" : "bg-rose-100 text-rose-700"
+                                }`}
+                              >
+                                {isTopup ? <ArrowDownLeft className="h-5 w-5" /> : <ArrowUpRight className="h-5 w-5" />}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-sm text-slate-900 truncate">{transaction.description}</p>
+                                <p className="text-xs text-slate-500">{dateFormatter.format(new Date(transaction.createdAt))}</p>
+                              </div>
+                            </div>
+                            <div className={`text-sm font-semibold ${isTopup ? "text-green-700" : "text-rose-700"}`}>
+                              ฿{amountLabel}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
           )}
 
-          {/* Info & Support Box */}
           <div className="bg-blue-50 border border-blue-100 p-5 rounded-2xl flex gap-4 items-start">
-             <div className="h-10 w-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
-               <HelpCircle className="h-6 w-6" />
-             </div>
-             <div className="space-y-1">
-               <p className="text-blue-900 font-bold text-sm">มีปัญหาเกี่ยวกับการเติมเงิน?</p>
-               <p className="text-blue-800 text-xs md:text-sm leading-relaxed">
-                 หากคุณพบปัญหาในการเติมเงิน หรือไม่ได้รับเงินมัดจำคืนตามกำหนด สามารถติดต่อสอบถามได้ที่เมนูช่วยเหลือหรือ Line: @chaonangsue
-               </p>
-             </div>
+            <div className="h-10 w-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
+              <HelpCircle className="h-6 w-6" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-blue-900 font-bold text-sm">มีปัญหาเกี่ยวกับการเติมเงิน?</p>
+              <p className="text-blue-800 text-xs md:text-sm leading-relaxed">
+                หากคุณพบปัญหาในการเติมเงิน หรือไม่ได้รับเงินมัดจำคืนตามกำหนด สามารถติดต่อสอบถามได้ที่เมนูช่วยเหลือหรือ Line: @chaonangsue
+              </p>
+            </div>
           </div>
         </div>
       </main>

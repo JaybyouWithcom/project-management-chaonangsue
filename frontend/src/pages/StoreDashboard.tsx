@@ -49,6 +49,8 @@ interface ApiRental {
   startDate: string;
   endDate: string;
   rentalPrice: number;
+  commissionRate: number;
+  netRentalAmount: number;
   status: "กำลังยืม" | "รอคืน" | "คืนแล้ว" | "เลยกำหนด";
   totalPrice: number;
   pastDueDays: number;
@@ -171,7 +173,7 @@ const StoreDashboard = () => {
     },
   });
 
-  const totalRevenue = rentals.filter(o => o.paymentStatus === "ชำระแล้ว").reduce((s, o) => s + o.totalPrice, 0);
+  const totalRevenue = rentals.filter(o => o.status === "คืนแล้ว").reduce((s, o) => s + o.netRentalAmount, 0);
   const totalPenalty = rentals.reduce((s, o) => s + o.fineAmountTotal, 0);
   const activeRentals = rentals.filter(o => o.status !== "คืนแล้ว").length;
   const overdueCount = rentals.filter(o => o.status === "เลยกำหนด").length;
@@ -867,3 +869,4 @@ const StoreDashboard = () => {
 };
 
 export default StoreDashboard;
+

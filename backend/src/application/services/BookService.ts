@@ -3,6 +3,7 @@ import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import type { Book, RentalPlan } from '../../domain/entities/Book.js';
 import type { BookRepository } from '../../domain/repositories/BookRepository.js';
 import type { ShopRepository } from '../../domain/repositories/ShopRepository.js';
+import { env } from '../../infrastructure/config/env.js';
 import { dbPool } from '../../infrastructure/database/mysql.js';
 import { AppError } from '../../shared/errors/AppError.js';
 
@@ -82,6 +83,8 @@ interface RentalRow extends RowDataPacket {
   start_date: Date;
   due_date: Date;
   rental_price: string;
+  commission_rate: string;
+  net_rental_amount: string;
   deposit_price: string;
   total_amount: string;
   past_due_days: number;
@@ -108,6 +111,8 @@ export interface RentalListItem {
   startDate: string;
   endDate: string;
   rentalPrice: number;
+  commissionRate: number;
+  netRentalAmount: number;
   depositPrice: number;
   totalPrice: number;
   pastDueDays: number;
@@ -122,29 +127,31 @@ export interface RentalListItem {
 }
 
 const mapRentalRow = (row: RentalRow): RentalListItem => ({
-  rentalId: row.rental_id,
-  bookId: row.book_id,
-  bookTitle: row.book_title,
-  bookCover: row.book_cover,
-  bookAuthor: row.book_author,
-  bookCondition: row.book_condition,
-  bookPrice: Number(row.book_price),
-  renterName: row.renter_name,
-  renterId: row.renter_id,
-  startDate: row.start_date.toISOString(),
-  endDate: row.due_date.toISOString(),
-  rentalPrice: Number(row.rental_price),
-  depositPrice: Number(row.deposit_price),
-  totalPrice: Number(row.total_amount),
-  pastDueDays: Number(row.past_due_days),
-  fineAmountDue: Number(row.fine_amount_due),
-  fineAmountTotal: Number(row.fine_amount_total),
-  finePaidAt: row.fine_paid_at ? row.fine_paid_at.toISOString() : null,
-  paymentStatus: row.payment_status,
-  status: row.status,
-  returnRequestedAt: row.return_requested_at ? row.return_requested_at.toISOString() : null,
-  returnDeliverySentAt: row.return_delivery_sent_at ? row.return_delivery_sent_at.toISOString() : null,
-  returnDeliveryProofPath: row.return_delivery_proof_path,
+    rentalId: row.rental_id,
+    bookId: row.book_id,
+    bookTitle: row.book_title,
+    bookCover: row.book_cover,
+    bookAuthor: row.book_author,
+    bookCondition: row.book_condition,
+    bookPrice: Number(row.book_price),
+    renterName: row.renter_name,
+    renterId: row.renter_id,
+    startDate: row.start_date.toISOString(),
+    endDate: row.due_date.toISOString(),
+    rentalPrice: Number(row.rental_price),
+    commissionRate: Number(row.commission_rate),
+    netRentalAmount: Number(row.net_rental_amount),
+    depositPrice: Number(row.deposit_price),
+    totalPrice: Number(row.total_amount),
+    pastDueDays: Number(row.past_due_days),
+    fineAmountDue: Number(row.fine_amount_due),
+    fineAmountTotal: Number(row.fine_amount_total),
+    finePaidAt: row.fine_paid_at ? row.fine_paid_at.toISOString() : null,
+    paymentStatus: row.payment_status,
+    status: row.status,
+    returnRequestedAt: row.return_requested_at ? row.return_requested_at.toISOString() : null,
+    returnDeliverySentAt: row.return_delivery_sent_at ? row.return_delivery_sent_at.toISOString() : null,
+    returnDeliveryProofPath: row.return_delivery_proof_path,
 });
 
 export class BookService {
@@ -316,6 +323,8 @@ export class BookService {
 
       const basePrice = Number(book.book_price);
       const rentalPrice = toMoney(basePrice * planRateMap[input.plan]);
+      const commissionRate = env.billing.commissionRate;
+      const netRentalAmount = toMoney(rentalPrice * (1 - commissionRate));
       const depositPrice = toMoney(basePrice * depositRate);
       const totalAmount = toMoney(rentalPrice + depositPrice);
       const currentBalance = Number(userRows[0].balance);
@@ -343,6 +352,8 @@ export class BookService {
           start_date,
           due_date,
           rental_price,
+          commission_rate,
+          net_rental_amount,
           deposit_price,
           total_amount,
           past_due_days,
@@ -350,7 +361,7 @@ export class BookService {
           status,
           payment_status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 'กำลังยืม', 'ชำระแล้ว')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 'กำลังยืม', 'ชำระแล้ว')
         `,
         [
           input.bookId,
@@ -362,6 +373,8 @@ export class BookService {
           now,
           dueDate,
           rentalPrice,
+          commissionRate,
+          netRentalAmount,
           depositPrice,
           totalAmount,
         ],
@@ -408,6 +421,8 @@ export class BookService {
         r.start_date,
         r.due_date,
         r.rental_price,
+        r.commission_rate,
+        r.net_rental_amount,
         r.deposit_price,
         r.total_amount,
         CASE
@@ -463,6 +478,8 @@ export class BookService {
         r.start_date,
         r.due_date,
         r.rental_price,
+        r.commission_rate,
+        r.net_rental_amount,
         r.deposit_price,
         r.total_amount,
         CASE

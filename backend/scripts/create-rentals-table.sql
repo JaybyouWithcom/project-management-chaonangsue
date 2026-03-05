@@ -9,6 +9,8 @@ CREATE TABLE rentals (
     start_date DATETIME NOT NULL,
     due_date DATETIME NOT NULL,
     rental_price DECIMAL(10,2) NOT NULL,
+    commission_rate DECIMAL(5,4) NOT NULL DEFAULT 0.0500,
+    net_rental_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     deposit_price DECIMAL(10,2) NOT NULL,
     total_amount DECIMAL(10,2) NOT NULL,
     past_due_days INT NOT NULL DEFAULT 0,

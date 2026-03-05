@@ -315,7 +315,10 @@ export class AuthService {
       throw new AppError('ชื่อผู้ใช้/รหัสผ่านไม่ถูกต้อง', 401);
     }
     if (user.role === 'Banned') {
-      throw new AppError('บัญชีผู้ใช้นี้ถูกระงับการใช้งาน', 403);
+      throw new AppError('บัญชีนี้ถูกแบนถาวร', 403);
+    }
+    if (user.suspendedUntil && user.suspendedUntil.getTime() > Date.now()) {
+      throw new AppError('บัญชีนี้ถูกระงับชั่วคราว', 403);
     }
 
     return {

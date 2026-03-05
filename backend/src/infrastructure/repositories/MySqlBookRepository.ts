@@ -75,12 +75,12 @@ export class MySqlBookRepository implements BookRepository {
   }
 
   async findById(bookId: number): Promise<Book | null> {
-    const [rows] = await dbPool.query<BookRow[]>(`${baseSelect} WHERE b.book_id = ? LIMIT 1`, [bookId]);
+    const [rows] = await dbPool.query<BookRow[]>(`${baseSelect} WHERE b.book_id = ? AND b.deleted_at IS NULL LIMIT 1`, [bookId]);
     return rows.length > 0 ? mapBook(rows[0]) : null;
   }
 
   async findAvailable(query: BookQuery): Promise<{ items: Book[]; total: number }> {
-    const whereClauses: string[] = ['b.status = ?'];
+    const whereClauses: string[] = ['b.status = ?', 'b.deleted_at IS NULL'];
     const values: Array<string | number> = ['Available'];
 
     whereClauses.push('(b.shop_id IS NULL OR s.deleted_at IS NULL)');
@@ -134,7 +134,7 @@ export class MySqlBookRepository implements BookRepository {
 
   async existsByShopAndTitle(shopId: number, title: string): Promise<boolean> {
     const [rows] = await dbPool.query<RowDataPacket[]>(
-      'SELECT 1 FROM books WHERE shop_id = ? AND title = ? LIMIT 1',
+      'SELECT 1 FROM books WHERE shop_id = ? AND title = ? AND deleted_at IS NULL LIMIT 1',
       [shopId, title],
     );
 
@@ -155,7 +155,7 @@ export class MySqlBookRepository implements BookRepository {
       `
       UPDATE books
       SET title = ?, image_path = ?, author = ?, isbn = ?, genre = ?, book_condition = ?, description = ?, book_price = ?
-      WHERE book_id = ?
+      WHERE book_id = ? AND deleted_at IS NULL
       `,
       [
         input.title,
@@ -179,6 +179,6 @@ export class MySqlBookRepository implements BookRepository {
   }
 
   async deleteById(bookId: number): Promise<void> {
-    await dbPool.query('DELETE FROM books WHERE book_id = ?', [bookId]);
+    await dbPool.query('UPDATE books SET deleted_at = NOW() WHERE book_id = ? AND deleted_at IS NULL', [bookId]);
   }
 }

@@ -17,6 +17,7 @@ import VerifyAccountPage from "./pages/VerifyAccount";
 import Settings from "./pages/Settings";
 import WalletPage from "./pages/Wallet";
 import WalletTopupPage from "./pages/WalletTopup";
+import AdminDashboard from "./pages/AdminDashboard";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,7 @@ const App = () => (
           <Route path="/settings" element={<Settings />} />
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/wallet/topup" element={<WalletTopupPage />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

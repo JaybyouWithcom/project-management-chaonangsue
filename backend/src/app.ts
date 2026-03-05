@@ -3,14 +3,17 @@ import path from 'node:path';
 import express from 'express';
 
 import { AuthService } from './application/services/AuthService.js';
+import { AdminService } from './application/services/AdminService.js';
 import { BookService } from './application/services/BookService.js';
 import { ShopService } from './application/services/ShopService.js';
+import { AdminController } from './api/controllers/AdminController.js';
 import { AuthController } from './api/controllers/AuthController.js';
 import { BookController } from './api/controllers/BookController.js';
 import { ShopController } from './api/controllers/ShopController.js';
 import { buildAuthMiddleware } from './api/middlewares/authMiddleware.js';
 import { errorHandler } from './api/middlewares/errorHandler.js';
 import { buildAuthRoutes } from './api/routes/authRoutes.js';
+import { buildAdminRoutes } from './api/routes/adminRoutes.js';
 import { buildBookRoutes } from './api/routes/bookRoutes.js';
 import { buildShopRoutes } from './api/routes/shopRoutes.js';
 import { MySqlBookRepository } from './infrastructure/repositories/MySqlBookRepository.js';
@@ -39,7 +42,9 @@ export const buildApp = () => {
 
   const userRepository = new MySqlUserRepository();
   const authService = new AuthService(userRepository);
+  const adminService = new AdminService();
   const authController = new AuthController(authService);
+  const adminController = new AdminController(adminService);
   const authMiddleware = buildAuthMiddleware(authService);
 
   const shopRepository = new MySqlShopRepository();
@@ -55,6 +60,7 @@ export const buildApp = () => {
   });
 
   app.use('/api/auth', buildAuthRoutes(authController, authMiddleware));
+  app.use('/api/admin', buildAdminRoutes(adminController, authMiddleware));
   app.use('/api/books', buildBookRoutes(bookController, authMiddleware));
   app.use('/api/shops', buildShopRoutes(shopController, authMiddleware));
 

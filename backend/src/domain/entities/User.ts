@@ -10,6 +10,7 @@ export interface User {
   password: string;
   role: UserRole;
   balance: string;
+  suspendedUntil: Date | null;
   deletedAt: Date | null;
 }
 
@@ -22,6 +23,7 @@ export interface PublicUser {
   phoneNumber: string | null;
   role: UserRole;
   balance: string;
+  suspendedUntil: Date | null;
   deletedAt: Date | null;
 }
 
@@ -44,5 +46,6 @@ export const toPublicUser = (user: User): PublicUser => ({
   phoneNumber: user.phoneNumber,
   role: user.role,
   balance: user.balance,
+  suspendedUntil: user.suspendedUntil,
   deletedAt: user.deletedAt,
 });

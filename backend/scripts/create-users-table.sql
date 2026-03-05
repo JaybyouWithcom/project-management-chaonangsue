@@ -8,6 +8,8 @@ CREATE TABLE users (
     password VARCHAR(255) NOT NULL,
     role ENUM('Customer','Admin','Banned') DEFAULT 'Customer',
     balance DECIMAL(10,2) DEFAULT 1000.00,
+    suspended_until DATETIME NULL,
     deleted_at TIMESTAMP NULL DEFAULT NULL,
-    INDEX idx_users_deleted_at (deleted_at)
+    INDEX idx_users_deleted_at (deleted_at),
+    INDEX idx_users_suspended_until (suspended_until)
 );

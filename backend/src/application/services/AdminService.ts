@@ -1,0 +1,306 @@
+import type { ResultSetHeader, RowDataPacket } from 'mysql2';
+
+import { dbPool } from '../../infrastructure/database/mysql.js';
+import { AppError } from '../../shared/errors/AppError.js';
+
+type UserRole = 'Customer' | 'Admin' | 'Banned';
+type UserStatusAction = 'BAN' | 'UNBAN' | 'SUSPEND' | 'UNSUSPEND';
+
+interface AdminUserRow extends RowDataPacket {
+  user_id: number;
+  firstname: string;
+  lastname: string;
+  username: string;
+  email: string;
+  phone_number: string | null;
+  role: UserRole;
+  balance: string;
+  suspended_until: Date | null;
+  deleted_at: Date | null;
+}
+
+interface AdminBookRow extends RowDataPacket {
+  book_id: number;
+  title: string;
+  author: string;
+  status: 'Available' | 'Rented';
+  owner_id: number;
+  owner_name: string;
+  shop_id: number | null;
+  shop_name: string | null;
+  created_at: Date;
+}
+
+interface DashboardSummaryRow extends RowDataPacket {
+  total_users: number;
+  banned_users: number;
+  suspended_users: number;
+  active_users: number;
+}
+
+interface CommissionSummaryRow extends RowDataPacket {
+  total_commission_revenue: string | null;
+}
+
+interface BookCountRow extends RowDataPacket {
+  total_books: number;
+}
+
+export interface AdminUserItem {
+  userId: number;
+  firstname: string;
+  lastname: string;
+  username: string;
+  email: string;
+  phoneNumber: string | null;
+  role: UserRole;
+  balance: number;
+  suspendedUntil: string | null;
+  deletedAt: string | null;
+}
+
+export interface AdminBookItem {
+  bookId: number;
+  title: string;
+  author: string;
+  status: 'Available' | 'Rented';
+  ownerId: number;
+  ownerName: string;
+  shopId: number | null;
+  shopName: string | null;
+  createdAt: string;
+}
+
+export interface AdminDashboardSummary {
+  totalUsers: number;
+  activeUsers: number;
+  suspendedUsers: number;
+  bannedUsers: number;
+  totalBooks: number;
+  totalCommissionRevenue: number;
+}
+
+export interface AdminDashboardData {
+  summary: AdminDashboardSummary;
+  users: AdminUserItem[];
+  books: AdminBookItem[];
+}
+
+const mapAdminUser = (row: AdminUserRow): AdminUserItem => ({
+  userId: row.user_id,
+  firstname: row.firstname,
+  lastname: row.lastname,
+  username: row.username,
+  email: row.email,
+  phoneNumber: row.phone_number,
+  role: row.role,
+  balance: Number(row.balance),
+  suspendedUntil: row.suspended_until ? row.suspended_until.toISOString() : null,
+  deletedAt: row.deleted_at ? row.deleted_at.toISOString() : null,
+});
+
+const mapAdminBook = (row: AdminBookRow): AdminBookItem => ({
+  bookId: row.book_id,
+  title: row.title,
+  author: row.author,
+  status: row.status,
+  ownerId: row.owner_id,
+  ownerName: row.owner_name,
+  shopId: row.shop_id,
+  shopName: row.shop_name,
+  createdAt: row.created_at.toISOString(),
+});
+
+export class AdminService {
+  private async assertAdmin(userId: number): Promise<void> {
+    const [rows] = await dbPool.query<Array<{ role: UserRole; deleted_at: Date | null } & RowDataPacket>>(
+      'SELECT role, deleted_at FROM users WHERE user_id = ? LIMIT 1',
+      [userId],
+    );
+    if (rows.length === 0 || rows[0].deleted_at !== null) {
+      throw new AppError('Unauthorized', 401);
+    }
+    if (rows[0].role !== 'Admin') {
+      throw new AppError('Forbidden', 403);
+    }
+  }
+
+  async getDashboardData(adminUserId: number): Promise<AdminDashboardData> {
+    await this.assertAdmin(adminUserId);
+
+    const [summaryRows] = await dbPool.query<DashboardSummaryRow[]>(
+      `
+      SELECT
+        COUNT(*) AS total_users,
+        SUM(CASE WHEN role = 'Banned' THEN 1 ELSE 0 END) AS banned_users,
+        SUM(CASE WHEN role != 'Banned' AND suspended_until IS NOT NULL AND suspended_until > NOW() THEN 1 ELSE 0 END) AS suspended_users,
+        SUM(CASE WHEN role != 'Banned' AND (suspended_until IS NULL OR suspended_until <= NOW()) THEN 1 ELSE 0 END) AS active_users
+      FROM users
+      WHERE deleted_at IS NULL
+      `,
+    );
+
+    const [commissionRows] = await dbPool.query<CommissionSummaryRow[]>(
+      `
+      SELECT COALESCE(SUM(ROUND(r.rental_price * r.commission_rate, 2)), 0) AS total_commission_revenue
+      FROM rentals r
+      WHERE r.status = 'คืนแล้ว'
+      `,
+    );
+
+    const [bookCountRows] = await dbPool.query<BookCountRow[]>(
+      `
+      SELECT COUNT(*) AS total_books
+      FROM books
+      WHERE deleted_at IS NULL
+      `,
+    );
+
+    const [users] = await dbPool.query<AdminUserRow[]>(
+      `
+      SELECT user_id, firstname, lastname, username, email, phone_number, role, balance, suspended_until, deleted_at
+      FROM users
+      WHERE deleted_at IS NULL
+      ORDER BY user_id DESC
+      `,
+    );
+
+    const [books] = await dbPool.query<AdminBookRow[]>(
+      `
+      SELECT
+        b.book_id,
+        b.title,
+        b.author,
+        b.status,
+        b.owner_id,
+        u.username AS owner_name,
+        b.shop_id,
+        s.shop_name,
+        b.created_at
+      FROM books b
+      JOIN users u ON u.user_id = b.owner_id
+      LEFT JOIN shops s ON s.shop_id = b.shop_id
+      WHERE b.deleted_at IS NULL
+      ORDER BY b.created_at DESC
+      LIMIT 200
+      `,
+    );
+
+    const summaryRow = summaryRows[0];
+    const commissionRow = commissionRows[0];
+    const bookCountRow = bookCountRows[0];
+
+    return {
+      summary: {
+        totalUsers: Number(summaryRow.total_users),
+        activeUsers: Number(summaryRow.active_users),
+        suspendedUsers: Number(summaryRow.suspended_users),
+        bannedUsers: Number(summaryRow.banned_users),
+        totalBooks: Number(bookCountRow.total_books),
+        totalCommissionRevenue: Number(commissionRow.total_commission_revenue ?? 0),
+      },
+      users: users.map(mapAdminUser),
+      books: books.map(mapAdminBook),
+    };
+  }
+
+  async updateUserStatus(
+    adminUserId: number,
+    input: { targetUserId: number; action: UserStatusAction; suspendUntil?: Date },
+  ): Promise<AdminUserItem> {
+    await this.assertAdmin(adminUserId);
+    if (input.targetUserId === adminUserId) {
+      throw new AppError('You cannot change your own status', 400);
+    }
+
+    const [targetRows] = await dbPool.query<AdminUserRow[]>(
+      `
+      SELECT user_id, firstname, lastname, username, email, phone_number, role, balance, suspended_until, deleted_at
+      FROM users
+      WHERE user_id = ? AND deleted_at IS NULL
+      LIMIT 1
+      `,
+      [input.targetUserId],
+    );
+    if (targetRows.length === 0) {
+      throw new AppError('User not found', 404);
+    }
+
+    const target = targetRows[0];
+    if (target.role === 'Admin') {
+      throw new AppError('Cannot change status of another admin', 400);
+    }
+
+    if (input.action === 'BAN') {
+      await dbPool.query(
+        `
+        UPDATE users
+        SET role = 'Banned', suspended_until = NULL
+        WHERE user_id = ? AND deleted_at IS NULL
+        `,
+        [input.targetUserId],
+      );
+    } else if (input.action === 'UNBAN') {
+      await dbPool.query(
+        `
+        UPDATE users
+        SET role = 'Customer'
+        WHERE user_id = ? AND deleted_at IS NULL
+        `,
+        [input.targetUserId],
+      );
+    } else if (input.action === 'SUSPEND') {
+      if (!input.suspendUntil || input.suspendUntil.getTime() <= Date.now()) {
+        throw new AppError('suspendUntil must be a future date-time', 400);
+      }
+      await dbPool.query(
+        `
+        UPDATE users
+        SET suspended_until = ?
+        WHERE user_id = ? AND deleted_at IS NULL AND role != 'Banned'
+        `,
+        [input.suspendUntil, input.targetUserId],
+      );
+    } else if (input.action === 'UNSUSPEND') {
+      await dbPool.query(
+        `
+        UPDATE users
+        SET suspended_until = NULL
+        WHERE user_id = ? AND deleted_at IS NULL
+        `,
+        [input.targetUserId],
+      );
+    }
+
+    const [updatedRows] = await dbPool.query<AdminUserRow[]>(
+      `
+      SELECT user_id, firstname, lastname, username, email, phone_number, role, balance, suspended_until, deleted_at
+      FROM users
+      WHERE user_id = ? AND deleted_at IS NULL
+      LIMIT 1
+      `,
+      [input.targetUserId],
+    );
+    if (updatedRows.length === 0) {
+      throw new AppError('User not found', 404);
+    }
+
+    return mapAdminUser(updatedRows[0]);
+  }
+
+  async softDeleteBook(adminUserId: number, bookId: number): Promise<void> {
+    await this.assertAdmin(adminUserId);
+
+    const [result] = await dbPool.query<ResultSetHeader>(
+      `
+      UPDATE books
+      SET deleted_at = NOW()
+      WHERE book_id = ? AND deleted_at IS NULL
+      `,
+      [bookId],
+    );
+    if (result.affectedRows === 0) {
+      throw new AppError('Book not found or already deleted', 404);
+    }
+  }
+}

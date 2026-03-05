@@ -1,5 +1,5 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, Search, User, Menu, X, Settings, Wallet, Store, LogIn, LogOut } from "lucide-react";
+﻿import { Link, useLocation, useNavigate } from "react-router-dom";
+import { BookOpen, Search, User, Menu, X, Settings, Wallet, Store, LogIn, LogOut, Shield } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -12,6 +12,7 @@ import myLogo from "@/assets/logo.png";
 interface AuthUser {
   userId: number;
   balance: string;
+  role: "Customer" | "Admin" | "Banned";
 }
 
 const currencyFormatter = new Intl.NumberFormat("th-TH", {
@@ -55,10 +56,12 @@ const Navbar = () => {
     { to: "/dashboard", label: "แดชบอร์ดของฉัน", icon: User },
     { to: "/store", label: "ร้านของฉัน", icon: Store },
     { to: "/settings", label: "การตั้งค่า", icon: Settings },
+    { to: "/admin/dashboard", label: "แดชบอร์ดแอดมิน", icon: Shield },
   ];
-  const navLinksToHideWhenLoggedOut = new Set(["/dashboard", "/store", "/settings"]);
+
+  const navLinksToHideWhenLoggedOut = new Set(["/dashboard", "/store", "/settings", "/admin/dashboard"]);
   const visibleNavLinks = loggedIn
-    ? navLinks
+    ? navLinks.filter((link) => (link.to === "/admin/dashboard" ? me?.role === "Admin" : true))
     : navLinks.filter((link) => !navLinksToHideWhenLoggedOut.has(link.to));
 
   return (
@@ -66,11 +69,7 @@ const Navbar = () => {
       <div className="container mx-auto px-4 h-16 flex items-center">
         <div className="flex-1 flex justify-start">
           <Link to="/" className="flex items-center gap-2">
-            <img 
-              src={myLogo} 
-              alt="ChaoNangsue Logo" 
-              className="h-11 w-11 object-contain"
-            />
+            <img src={myLogo} alt="ChaoNangsue Logo" className="h-11 w-11 object-contain" />
             <span className="font-display text-xl font-bold text-primary">ChaoNangsue</span>
             <span className="text-xs text-accent font-semibold">.com</span>
           </Link>
@@ -94,7 +93,7 @@ const Navbar = () => {
         </div>
 
         <div className="flex-1 flex justify-end items-center gap-3">
-          {/* ซ่อนยอดเงินคงเหลือในจอใหญ่เมื่อยังไม่ล็อกอิน */}
+          {/* ซ่อนยอดเงินคงเหลือบนจอใหญ่เมื่อยังไม่ล็อกอิน */}
           {loggedIn && (
             <Link
               to="/wallet"
@@ -113,7 +112,7 @@ const Navbar = () => {
               onClick={() => {
                 clearAuthToken();
                 setLoggedIn(false);
-                navigate('/');
+                navigate("/");
               }}
             >
               <LogOut className="h-4 w-4 mr-1" /> ออกจากระบบ
@@ -137,7 +136,7 @@ const Navbar = () => {
 
       {mobileOpen && (
         <div className="md:hidden border-t bg-card px-4 pb-4 pt-2 space-y-3">
-          {/* ซ่อนยอดเงินคงเหลือในจอมือถือเมื่อยังไม่ล็อกอิน */}
+          {/* ซ่อนยอดเงินคงเหลือบนมือถือเมื่อยังไม่ล็อกอิน */}
           {loggedIn && (
             <Link
               to="/wallet"
@@ -175,7 +174,7 @@ const Navbar = () => {
                   clearAuthToken();
                   setLoggedIn(false);
                   setMobileOpen(false);
-                  navigate('/');
+                  navigate("/");
                 }}
               >
                 <LogOut className="h-4 w-4" /> ออกจากระบบ

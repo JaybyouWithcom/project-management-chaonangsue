@@ -14,6 +14,7 @@ interface UserRow extends RowDataPacket {
   password: string;
   role: User['role'];
   balance: string;
+  suspended_until: Date | null;
   deleted_at: Date | null;
 }
 
@@ -27,6 +28,7 @@ const mapUser = (row: UserRow): User => ({
   password: row.password,
   role: row.role,
   balance: row.balance,
+  suspendedUntil: row.suspended_until,
   deletedAt: row.deleted_at,
 });
 

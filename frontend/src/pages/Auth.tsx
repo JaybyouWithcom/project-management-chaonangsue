@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -134,6 +134,11 @@ const AuthPage = () => {
             >
               <Input placeholder="Username หรือ Email" value={login} onChange={(e) => setLogin(e.target.value)} />
               <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <div className="text-right">
+                <Link to="/auth/forgot-password" className="text-sm text-primary hover:underline">
+                  ลืมรหัสผ่าน?
+                </Link>
+              </div>
               <Button type="submit" disabled={submitting} className="w-full">เข้าสู่ระบบ</Button>
             </form>
           </TabsContent>

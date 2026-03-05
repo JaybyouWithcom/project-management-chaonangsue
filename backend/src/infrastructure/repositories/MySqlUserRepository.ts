@@ -134,6 +134,17 @@ export class MySqlUserRepository implements UserRepository {
     return user;
   }
 
+  async updatePasswordById(userId: number, passwordHash: string): Promise<void> {
+    await dbPool.query(
+      `
+      UPDATE users
+      SET password = ?
+      WHERE user_id = ? AND deleted_at IS NULL
+      `,
+      [passwordHash, userId],
+    );
+  }
+
   async softDeleteById(userId: number): Promise<void> {
     await dbPool.query('UPDATE users SET deleted_at = NOW() WHERE user_id = ? AND deleted_at IS NULL', [userId]);
   }

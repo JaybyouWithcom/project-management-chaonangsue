@@ -57,6 +57,22 @@ interface VerifyOtpInput {
   otp: string;
 }
 
+interface ForgotPasswordInput {
+  email: string;
+}
+
+interface ResetPasswordInput {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
+interface ChangePasswordInput {
+  userId: number;
+  currentPassword: string;
+  newPassword: string;
+}
+
 interface PendingSignupRow extends RowDataPacket {
   pending_signup_id: number;
   firstname: string;
@@ -71,6 +87,12 @@ interface PendingSignupRow extends RowDataPacket {
 
 interface PendingOtpRow extends RowDataPacket {
   pending_signup_otp_id: number;
+  otp_hash: string;
+  expires_at: Date;
+}
+
+interface PasswordResetOtpRow extends RowDataPacket {
+  password_reset_otp_id: number;
   otp_hash: string;
   expires_at: Date;
 }
@@ -294,6 +316,94 @@ export class AuthService {
     return toPublicUser(user);
   }
 
+  async requestPasswordReset(input: ForgotPasswordInput): Promise<{ expiresInSeconds: number }> {
+    const email = input.email.trim().toLowerCase();
+    if (!emailRegex.test(email)) {
+      throw new AppError('กรุณากรอกอีเมลในรูปแบบที่ถูกต้อง เช่น user@example.com', 400);
+    }
+
+    const expiresInSeconds = 300;
+    const user = await this.userRepository.findByEmail(email);
+    if (!user) {
+      // Return the same response even when not found to avoid account enumeration.
+      return { expiresInSeconds };
+    }
+
+    const otp = generateOtp();
+    const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
+
+    await this.sendEmailOtp(email, otp);
+
+    await dbPool.query(
+      `
+      UPDATE password_reset_otps
+      SET used_at = NOW()
+      WHERE user_id = ? AND used_at IS NULL
+      `,
+      [user.userId],
+    );
+
+    await dbPool.query(
+      `
+      INSERT INTO password_reset_otps (user_id, target, otp_hash, expires_at)
+      VALUES (?, ?, ?, ?)
+      `,
+      [user.userId, email, hashOtp(otp), expiresAt],
+    );
+
+    return { expiresInSeconds };
+  }
+
+  async resetPassword(input: ResetPasswordInput): Promise<void> {
+    const email = input.email.trim().toLowerCase();
+    const otp = input.otp.trim();
+    const newPassword = input.newPassword;
+
+    if (!emailRegex.test(email)) {
+      throw new AppError('กรุณากรอกอีเมลในรูปแบบที่ถูกต้อง เช่น user@example.com', 400);
+    }
+    if (!otp) {
+      throw new AppError('กรุณากรอก OTP', 400);
+    }
+    if (newPassword.length < 8) {
+      throw new AppError('รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร', 400);
+    }
+
+    const user = await this.userRepository.findByEmail(email);
+    if (!user) {
+      throw new AppError('ข้อมูลสำหรับรีเซ็ตรหัสผ่านไม่ถูกต้อง', 400);
+    }
+
+    const [rows] = await dbPool.query<PasswordResetOtpRow[]>(
+      `
+      SELECT password_reset_otp_id, otp_hash, expires_at
+      FROM password_reset_otps
+      WHERE user_id = ? AND used_at IS NULL
+      ORDER BY password_reset_otp_id DESC
+      LIMIT 1
+      `,
+      [user.userId],
+    );
+
+    if (rows.length === 0) {
+      throw new AppError('ไม่พบ OTP ที่ใช้งานได้', 400);
+    }
+
+    const row = rows[0];
+    if (row.expires_at.getTime() < Date.now()) {
+      throw new AppError('OTP หมดอายุแล้ว', 400);
+    }
+    if (hashOtp(otp) !== row.otp_hash) {
+      throw new AppError('OTP ไม่ถูกต้อง', 400);
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, env.auth.bcryptSaltRounds);
+    await this.userRepository.updatePasswordById(user.userId, passwordHash);
+    await dbPool.query('UPDATE password_reset_otps SET used_at = NOW() WHERE password_reset_otp_id = ?', [
+      row.password_reset_otp_id,
+    ]);
+  }
+
   async updateProfile(input: UpdateProfileInput): Promise<PublicUser> {
     const email = input.email.trim().toLowerCase();
     if (!input.firstname.trim() || !input.lastname.trim() || !email) {
@@ -328,6 +438,36 @@ export class AuthService {
     });
 
     return toPublicUser(updated);
+  }
+
+  async changePassword(input: ChangePasswordInput): Promise<void> {
+    const currentPassword = input.currentPassword.trim();
+    const newPassword = input.newPassword;
+
+    if (!currentPassword) {
+      throw new AppError('กรุณากรอกรหัสผ่านปัจจุบัน', 400);
+    }
+    if (newPassword.length < 8) {
+      throw new AppError('รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร', 400);
+    }
+
+    const user = await this.userRepository.findById(input.userId);
+    if (!user) {
+      throw new AppError('ไม่พบบัญชีผู้ใช้', 404);
+    }
+
+    const passwordMatched = await bcrypt.compare(currentPassword, user.password);
+    if (!passwordMatched) {
+      throw new AppError('รหัสผ่านปัจจุบันไม่ถูกต้อง', 400);
+    }
+
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      throw new AppError('รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม', 400);
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, env.auth.bcryptSaltRounds);
+    await this.userRepository.updatePasswordById(user.userId, passwordHash);
   }
 
   async topUpWallet(input: TopUpWalletInput): Promise<TopUpWalletResponse> {

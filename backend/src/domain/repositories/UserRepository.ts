@@ -14,6 +14,7 @@ export interface UserRepository {
   findById(userId: number): Promise<User | null>;
   create(input: CreateUserInput): Promise<User>;
   updateProfileById(userId: number, input: UpdateProfileInput): Promise<User>;
+  updatePasswordById(userId: number, passwordHash: string): Promise<void>;
   incrementBalanceById(userId: number, amount: number): Promise<User>;
   softDeleteById(userId: number): Promise<void>;
   restoreById(userId: number): Promise<void>;

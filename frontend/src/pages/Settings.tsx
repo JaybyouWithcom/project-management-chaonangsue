@@ -58,6 +58,12 @@ const Settings = () => {
     email: "",
   });
   const [saving, setSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmNewPassword: "",
+  });
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const { data: user, isLoading, isError } = useQuery({
     queryKey: ["settings-me", token],
@@ -108,6 +114,55 @@ const Settings = () => {
       toast({ title: "บันทึกข้อมูลไม่สำเร็จ", description: errorMessage, variant: "destructive" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleChangePassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token) return;
+
+    if (!passwordForm.currentPassword.trim()) {
+      toast({ title: "กรุณากรอกรหัสผ่านปัจจุบัน", variant: "destructive" });
+      return;
+    }
+    if (passwordForm.newPassword.length < 8) {
+      toast({
+        title: "รหัสผ่านใหม่สั้นเกินไป",
+        description: "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmNewPassword) {
+      toast({
+        title: "รหัสผ่านใหม่ไม่ตรงกัน",
+        description: "กรุณากรอกรหัสผ่านใหม่และยืนยันรหัสผ่านให้ตรงกัน",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await apiPatch(
+        "/api/auth/me/password",
+        {
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        },
+        token,
+      );
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmNewPassword: "",
+      });
+      toast({ title: "เปลี่ยนรหัสผ่านสำเร็จ" });
+    } catch (error) {
+      const errorMessage = error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด";
+      toast({ title: "เปลี่ยนรหัสผ่านไม่สำเร็จ", description: errorMessage, variant: "destructive" });
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -227,6 +282,44 @@ const Settings = () => {
                       </div>
                     </div>
                   </div>
+
+                  <form className="space-y-4 border-t pt-6" onSubmit={(event) => { void handleChangePassword(event); }} noValidate>
+                    <h3 className="font-semibold">เปลี่ยนรหัสผ่าน</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label htmlFor="current-password" className="mb-1.5 block">รหัสผ่านปัจจุบัน</Label>
+                        <Input
+                          id="current-password"
+                          type="password"
+                          value={passwordForm.currentPassword}
+                          onChange={(event) => setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="new-password" className="mb-1.5 block">รหัสผ่านใหม่</Label>
+                        <Input
+                          id="new-password"
+                          type="password"
+                          value={passwordForm.newPassword}
+                          onChange={(event) => setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="confirm-new-password" className="mb-1.5 block">ยืนยันรหัสผ่านใหม่</Label>
+                        <Input
+                          id="confirm-new-password"
+                          type="password"
+                          value={passwordForm.confirmNewPassword}
+                          onChange={(event) => setPasswordForm((prev) => ({ ...prev, confirmNewPassword: event.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button type="submit" disabled={changingPassword}>
+                        {changingPassword ? "กำลังเปลี่ยนรหัสผ่าน..." : "เปลี่ยนรหัสผ่าน"}
+                      </Button>
+                    </div>
+                  </form>
                 </CardContent>
               </Card>
             </>

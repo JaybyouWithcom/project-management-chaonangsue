@@ -33,7 +33,10 @@
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
+- `POST /api/auth/password/forgot`
+- `POST /api/auth/password/reset`
 - `GET /api/auth/me` (ต้องส่ง `Authorization: Bearer <token>`)
+- `PATCH /api/auth/me/password` (ต้องส่ง `Authorization: Bearer <token>`)
 
 หมายเหตุ: ผู้ใช้ใหม่จะเป็น `Customer` เสมอ (ตัด role `Lender` ออกแล้ว)
 
@@ -85,7 +88,10 @@ Error มาตรฐาน:
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
+- `POST /api/auth/password/forgot`
+- `POST /api/auth/password/reset`
 - `GET /api/auth/me` (ต้องส่ง Bearer token)
+- `PATCH /api/auth/me/password` (ต้องส่ง Bearer token)
 
 ### Books
 
@@ -106,6 +112,7 @@ Error มาตรฐาน:
 ## Database Scripts
 
 - สร้างตารางผู้ใช้: `scripts/create-users-table.sql`
+- สร้างตาราง OTP สำหรับลืมรหัสผ่าน: `scripts/create-password-reset-otps-table.sql`
 - สร้างตารางร้านค้า (1 user มีหลายร้าน): `scripts/create-shops-table.sql`
 - migrate บทบาทเก่า `Lender` -> `Customer`: `scripts/migrate-merge-lender-role.sql`
 - เพิ่ม soft delete ให้ users: `scripts/migrate-add-user-soft-delete.sql`

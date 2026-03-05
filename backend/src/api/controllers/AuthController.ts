@@ -88,6 +88,44 @@ export class AuthController {
     sendSuccess(res, result);
   };
 
+  forgotPassword = async (req: Request, res: Response): Promise<void> => {
+    const { email } = req.body as Record<string, unknown>;
+    if (!isNonEmptyString(email)) {
+      throw new AppError('Missing email', 400);
+    }
+
+    const result = await this.authService.requestPasswordReset({ email });
+    sendSuccess(res, result);
+  };
+
+  resetPassword = async (req: Request, res: Response): Promise<void> => {
+    const { email, otp, newPassword } = req.body as Record<string, unknown>;
+    if (!isNonEmptyString(email) || !isNonEmptyString(otp) || !isNonEmptyString(newPassword)) {
+      throw new AppError('Missing required fields', 400);
+    }
+
+    await this.authService.resetPassword({ email, otp, newPassword });
+    sendSuccess(res, { message: 'รีเซ็ตรหัสผ่านสำเร็จ' });
+  };
+
+  changePassword = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const { currentPassword, newPassword } = req.body as Record<string, unknown>;
+    if (!isNonEmptyString(currentPassword) || !isNonEmptyString(newPassword)) {
+      throw new AppError('Missing required fields', 400);
+    }
+
+    await this.authService.changePassword({
+      userId: req.auth.userId,
+      currentPassword,
+      newPassword,
+    });
+    sendSuccess(res, { message: 'เปลี่ยนรหัสผ่านสำเร็จ' });
+  };
+
   me = async (req: Request, res: Response): Promise<void> => {
     if (!req.auth?.userId) {
       throw new AppError('Unauthorized', 401);

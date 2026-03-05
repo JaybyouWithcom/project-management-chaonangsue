@@ -12,6 +12,7 @@ import StoreMenu from "./pages/StoreMenu";
 import ShopPage from "./pages/ShopPage";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/Auth";
+import ForgotPasswordPage from "./pages/ForgotPassword";
 import VerifyAccountPage from "./pages/VerifyAccount";
 import Settings from "./pages/Settings";
 import WalletPage from "./pages/Wallet";
@@ -34,6 +35,7 @@ const App = () => (
           <Route path="/store" element={<StoreMenu />} />
           <Route path="/store/dashboard" element={<StoreDashboard />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/auth/verify" element={<VerifyAccountPage />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/wallet" element={<WalletPage />} />

@@ -109,11 +109,15 @@ Error มาตรฐาน:
   - body ต้องส่ง `shopName` และ `imageBase64` (data URL)
   - `description` เป็น optional
 
+- `POST /api/books/rentals/:rentalId/return` (ผู้เช่าส่งคำขอคืน พร้อมรูปหลักฐานและเวลาจัดส่งคืน)
+- `POST /api/books/rentals/:rentalId/confirm-return` (ร้านยืนยันว่าได้รับหนังสือคืนแล้ว)
+
 ## Database Scripts
 
 - สร้างตารางผู้ใช้: `scripts/create-users-table.sql`
 - สร้างตาราง OTP สำหรับลืมรหัสผ่าน: `scripts/create-password-reset-otps-table.sql`
 - สร้างตารางร้านค้า (1 user มีหลายร้าน): `scripts/create-shops-table.sql`
+- เพิ่มฟิลด์คำขอคืนใน rentals: `scripts/migrate-rentals-add-return-request-fields.sql`
 - migrate บทบาทเก่า `Lender` -> `Customer`: `scripts/migrate-merge-lender-role.sql`
 - เพิ่ม soft delete ให้ users: `scripts/migrate-add-user-soft-delete.sql`
 - เพิ่ม soft delete ให้ shops: `scripts/migrate-add-shop-soft-delete.sql`

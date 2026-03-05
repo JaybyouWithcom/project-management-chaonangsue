@@ -18,6 +18,14 @@ export const buildBookRoutes = (bookController: BookController, authMiddleware: 
     bookController.payFine(req, res).catch(next);
   });
 
+  router.post('/rentals/:rentalId/return', authMiddleware, (req, res, next) => {
+    bookController.requestReturn(req, res).catch(next);
+  });
+
+  router.post('/rentals/:rentalId/confirm-return', authMiddleware, (req, res, next) => {
+    bookController.confirmReturnByShop(req, res).catch(next);
+  });
+
   router.get('/', (req, res, next) => {
     bookController.list(req, res).catch(next);
   });

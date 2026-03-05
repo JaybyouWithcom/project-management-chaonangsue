@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { mockOrders, genres } from "@/lib/mockData";
+import { genres } from "@/lib/mockData";
 import { conditionOptions, normalizeConditionLabel } from "@/lib/bookCondition";
 import { useToast } from "@/hooks/use-toast";
 import { apiDelete, apiGet, apiPatch, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
@@ -49,13 +49,16 @@ interface ApiRental {
   startDate: string;
   endDate: string;
   rentalPrice: number;
-  status: "กำลังยืม" | "คืนแล้ว" | "เลยกำหนด";
+  status: "กำลังยืม" | "รอคืน" | "คืนแล้ว" | "เลยกำหนด";
   totalPrice: number;
   pastDueDays: number;
   fineAmountDue: number;
   fineAmountTotal: number;
   finePaidAt: string | null;
   paymentStatus: "รอชำระ" | "ชำระแล้ว" | "ยกเลิก";
+  returnRequestedAt: string | null;
+  returnDeliverySentAt: string | null;
+  returnDeliveryProofPath: string | null;
 }
 
 type InventoryFilter = "all" | "rented" | "not-rented";
@@ -84,6 +87,13 @@ const paymentStatusColors: Record<string, string> = {
   "รอชำระ": "bg-warning/20 text-warning",
   "ชำระแล้ว": "bg-success/20 text-success",
   "ยกเลิก": "bg-destructive/20 text-destructive",
+};
+
+const rentalStatusColors: Record<ApiRental["status"], string> = {
+  "กำลังยืม": "bg-info/20 text-info",
+  "รอคืน": "bg-accent/20 text-accent",
+  "คืนแล้ว": "bg-success/20 text-success",
+  "เลยกำหนด": "bg-destructive/20 text-destructive",
 };
 
 const StoreDashboard = () => {
@@ -434,6 +444,28 @@ const StoreDashboard = () => {
     }
   };
 
+  const handleConfirmReturnReceived = async (rentalId: number) => {
+    if (!token) {
+      toast({ title: "กรุณา login ก่อน", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await apiPost(`/api/books/rentals/${rentalId}/confirm-return`, {}, token);
+      toast({ title: "ยืนยันรับคืนหนังสือสำเร็จ" });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["shop-rentals", shopId] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-books", shopId] }),
+      ]);
+    } catch (error) {
+      toast({
+        title: "ยืนยันรับคืนไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -610,7 +642,66 @@ const StoreDashboard = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="orders"><div className="text-muted-foreground">ยังเป็น mock data (เชื่อมจริงรอบถัดไป)</div></TabsContent>
+          <TabsContent value="orders">
+            <div className="bg-card rounded-xl border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>รหัสคำสั่ง</TableHead>
+                    <TableHead>ผู้เช่า</TableHead>
+                    <TableHead>หนังสือ</TableHead>
+                    <TableHead>กำหนดคืน</TableHead>
+                    <TableHead>สถานะ</TableHead>
+                    <TableHead>จัดการ</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rentals.map((rental) => (
+                    <TableRow key={rental.rentalId}>
+                      <TableCell className="font-mono text-xs">RENT-{rental.rentalId}</TableCell>
+                      <TableCell>{rental.renterName}</TableCell>
+                      <TableCell>{rental.bookTitle}</TableCell>
+                      <TableCell>{new Date(rental.endDate).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <Badge className={`${rentalStatusColors[rental.status]} border-0`}>{rental.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {rental.status === "รอคืน" ? (
+                          <div className="space-y-2">
+                            {rental.returnDeliverySentAt && (
+                              <p className="text-xs text-muted-foreground">
+                                ส่งคืน: {new Date(rental.returnDeliverySentAt).toLocaleString()}
+                              </p>
+                            )}
+                            {rental.returnDeliveryProofPath && (
+                              <a
+                                href={resolveImageUrl(rental.returnDeliveryProofPath)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs text-primary underline underline-offset-2 block"
+                              >
+                                ดูหลักฐาน
+                              </a>
+                            )}
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                void handleConfirmReturnReceived(rental.rentalId);
+                              }}
+                            >
+                              ยืนยันได้รับหนังสือแล้ว
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
           <TabsContent value="revenue">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-card rounded-xl border p-6">

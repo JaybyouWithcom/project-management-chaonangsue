@@ -81,13 +81,17 @@ interface RentalRow extends RowDataPacket {
   start_date: Date;
   due_date: Date;
   rental_price: string;
+  deposit_price: string;
   total_amount: string;
   past_due_days: number;
   fine_paid_at: Date | null;
   fine_amount_due: string;
   fine_amount_total: string;
   payment_status: 'ชำระแล้ว' | 'รอชำระ' | 'ยกเลิก';
-  status: 'กำลังยืม' | 'คืนแล้ว' | 'เลยกำหนด';
+  status: 'กำลังยืม' | 'รอคืน' | 'คืนแล้ว' | 'เลยกำหนด';
+  return_requested_at: Date | null;
+  return_delivery_sent_at: Date | null;
+  return_delivery_proof_path: string | null;
 }
 
 export interface RentalListItem {
@@ -103,13 +107,17 @@ export interface RentalListItem {
   startDate: string;
   endDate: string;
   rentalPrice: number;
+  depositPrice: number;
   totalPrice: number;
   pastDueDays: number;
   fineAmountDue: number;
   fineAmountTotal: number;
   finePaidAt: string | null;
   paymentStatus: 'ชำระแล้ว' | 'รอชำระ' | 'ยกเลิก';
-  status: 'กำลังยืม' | 'คืนแล้ว' | 'เลยกำหนด';
+  status: 'กำลังยืม' | 'รอคืน' | 'คืนแล้ว' | 'เลยกำหนด';
+  returnRequestedAt: string | null;
+  returnDeliverySentAt: string | null;
+  returnDeliveryProofPath: string | null;
 }
 
 const mapRentalRow = (row: RentalRow): RentalListItem => ({
@@ -125,6 +133,7 @@ const mapRentalRow = (row: RentalRow): RentalListItem => ({
   startDate: row.start_date.toISOString(),
   endDate: row.due_date.toISOString(),
   rentalPrice: Number(row.rental_price),
+  depositPrice: Number(row.deposit_price),
   totalPrice: Number(row.total_amount),
   pastDueDays: Number(row.past_due_days),
   fineAmountDue: Number(row.fine_amount_due),
@@ -132,6 +141,9 @@ const mapRentalRow = (row: RentalRow): RentalListItem => ({
   finePaidAt: row.fine_paid_at ? row.fine_paid_at.toISOString() : null,
   paymentStatus: row.payment_status,
   status: row.status,
+  returnRequestedAt: row.return_requested_at ? row.return_requested_at.toISOString() : null,
+  returnDeliverySentAt: row.return_delivery_sent_at ? row.return_delivery_sent_at.toISOString() : null,
+  returnDeliveryProofPath: row.return_delivery_proof_path,
 });
 
 export class BookService {
@@ -387,6 +399,7 @@ export class BookService {
         r.start_date,
         r.due_date,
         r.rental_price,
+        r.deposit_price,
         r.total_amount,
         CASE
           WHEN (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW())) AND r.fine_paid_at IS NULL
@@ -401,6 +414,9 @@ export class BookService {
         END AS fine_amount_due,
         ROUND((r.past_due_days * r.rental_price * 0.30), 2) AS fine_amount_total,
         r.payment_status,
+        r.return_requested_at,
+        r.return_delivery_sent_at,
+        r.return_delivery_proof_path,
         CASE
           WHEN r.status = 'กำลังยืม' AND r.due_date < NOW() THEN 'เลยกำหนด'
           ELSE r.status
@@ -438,6 +454,7 @@ export class BookService {
         r.start_date,
         r.due_date,
         r.rental_price,
+        r.deposit_price,
         r.total_amount,
         CASE
           WHEN (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW())) AND r.fine_paid_at IS NULL
@@ -452,6 +469,9 @@ export class BookService {
         END AS fine_amount_due,
         ROUND((r.past_due_days * r.rental_price * 0.30), 2) AS fine_amount_total,
         r.payment_status,
+        r.return_requested_at,
+        r.return_delivery_sent_at,
+        r.return_delivery_proof_path,
         CASE
           WHEN r.status = 'กำลังยืม' AND r.due_date < NOW() THEN 'เลยกำหนด'
           ELSE r.status
@@ -486,7 +506,7 @@ export class BookService {
         renter_id: number;
         rental_price: string;
         due_date: Date;
-        status: 'กำลังยืม' | 'คืนแล้ว' | 'เลยกำหนด';
+        status: 'กำลังยืม' | 'รอคืน' | 'คืนแล้ว' | 'เลยกำหนด';
         fine_paid_at: Date | null;
         past_due_days: number;
       } & RowDataPacket>>(
@@ -546,6 +566,170 @@ export class BookService {
         rentalId: input.rentalId,
         pastDueDays,
         fineAmount,
+        balanceAfter,
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async requestReturn(input: {
+    userId: number;
+    rentalId: number;
+    deliveryProofPath: string;
+    deliverySentAt: Date;
+  }): Promise<{
+    rentalId: number;
+    status: 'รอคืน';
+    returnRequestedAt: string;
+    returnDeliverySentAt: string;
+    returnDeliveryProofPath: string;
+  }> {
+    const connection = await dbPool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const [rentalRows] = await connection.query<Array<{
+        rental_id: number;
+        renter_id: number;
+        status: 'กำลังยืม' | 'รอคืน' | 'คืนแล้ว' | 'เลยกำหนด';
+        due_date: Date;
+      } & RowDataPacket>>(
+        `
+        SELECT rental_id, COALESCE(renter_id, borrower_id) AS renter_id, status, due_date
+        FROM rentals
+        WHERE rental_id = ?
+        FOR UPDATE
+        `,
+        [input.rentalId],
+      );
+
+      if (rentalRows.length === 0) {
+        throw new AppError('Rental not found', 404);
+      }
+
+      const rental = rentalRows[0];
+      if (rental.renter_id !== input.userId) {
+        throw new AppError('Unauthorized', 403);
+      }
+      if (rental.status === 'คืนแล้ว') {
+        throw new AppError('รายการนี้ถูกคืนแล้ว', 400);
+      }
+      if (rental.status === 'รอคืน') {
+        throw new AppError('คุณได้ส่งคำขอคืนหนังสือแล้ว', 409);
+      }
+      if (rental.status === 'เลยกำหนด' || rental.due_date.getTime() < Date.now()) {
+        throw new AppError('รายการนี้เลยกำหนดแล้ว ยังไม่เปิดรับการคืนผ่านระบบตอนนี้', 400);
+      }
+
+      const now = new Date();
+      await connection.query(
+        `
+        UPDATE rentals
+        SET
+          status = 'รอคืน',
+          return_requested_at = ?,
+          return_delivery_sent_at = ?,
+          return_delivery_proof_path = ?
+        WHERE rental_id = ?
+        `,
+        [now, input.deliverySentAt, input.deliveryProofPath, input.rentalId],
+      );
+
+      await connection.commit();
+
+      return {
+        rentalId: input.rentalId,
+        status: 'รอคืน',
+        returnRequestedAt: now.toISOString(),
+        returnDeliverySentAt: input.deliverySentAt.toISOString(),
+        returnDeliveryProofPath: input.deliveryProofPath,
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async confirmReturnByShop(input: {
+    userId: number;
+    rentalId: number;
+  }): Promise<{
+    rentalId: number;
+    bookId: number;
+    status: 'คืนแล้ว';
+    refundedAmount: number;
+    renterId: number;
+    balanceAfter: number;
+  }> {
+    const connection = await dbPool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const [rentalRows] = await connection.query<Array<{
+        rental_id: number;
+        book_id: number;
+        shop_id: number | null;
+        owner_id: number;
+        renter_id: number;
+        deposit_price: string;
+        status: 'กำลังยืม' | 'รอคืน' | 'คืนแล้ว' | 'เลยกำหนด';
+      } & RowDataPacket>>(
+        `
+        SELECT rental_id, book_id, shop_id, owner_id, COALESCE(renter_id, borrower_id) AS renter_id, deposit_price, status
+        FROM rentals
+        WHERE rental_id = ?
+        FOR UPDATE
+        `,
+        [input.rentalId],
+      );
+
+      if (rentalRows.length === 0) {
+        throw new AppError('Rental not found', 404);
+      }
+
+      const rental = rentalRows[0];
+      if (rental.status !== 'รอคืน') {
+        throw new AppError('รายการนี้ยังไม่อยู่ในสถานะรอคืน', 400);
+      }
+
+      if (rental.shop_id) {
+        const shop = await this.shopRepository.findById(rental.shop_id);
+        if (!shop || shop.userId !== input.userId) {
+          throw new AppError('Unauthorized', 403);
+        }
+      } else if (rental.owner_id !== input.userId) {
+        throw new AppError('Unauthorized', 403);
+      }
+
+      const [renterRows] = await connection.query<UserBalanceRow[]>(
+        'SELECT user_id, balance FROM users WHERE user_id = ? AND deleted_at IS NULL FOR UPDATE',
+        [rental.renter_id],
+      );
+      if (renterRows.length === 0) {
+        throw new AppError('User not found', 404);
+      }
+
+      const refundedAmount = toMoney(Number(rental.deposit_price));
+      const balanceAfter = toMoney(Number(renterRows[0].balance) + refundedAmount);
+
+      await connection.query('UPDATE rentals SET status = ? WHERE rental_id = ?', ['คืนแล้ว', input.rentalId]);
+      await connection.query('UPDATE books SET status = ? WHERE book_id = ?', ['Available', rental.book_id]);
+      await connection.query('UPDATE users SET balance = ? WHERE user_id = ?', [balanceAfter, rental.renter_id]);
+
+      await connection.commit();
+
+      return {
+        rentalId: input.rentalId,
+        bookId: rental.book_id,
+        status: 'คืนแล้ว',
+        refundedAmount,
+        renterId: rental.renter_id,
         balanceAfter,
       };
     } catch (error) {

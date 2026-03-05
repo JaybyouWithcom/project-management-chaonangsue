@@ -117,7 +117,7 @@ export interface TopUpWalletResponse {
 
 interface WalletTransactionRow extends RowDataPacket {
   transaction_id: number;
-  transaction_type: 'TOPUP' | 'RENTAL';
+  transaction_type: 'TOPUP' | 'RENTAL' | 'REFUND';
   amount: string;
   description: string;
   created_at: Date;
@@ -125,7 +125,7 @@ interface WalletTransactionRow extends RowDataPacket {
 
 export interface WalletTransactionItem {
   transactionId: number;
-  type: 'TOPUP' | 'RENTAL';
+  type: 'TOPUP' | 'RENTAL' | 'REFUND';
   amount: number;
   description: string;
   createdAt: string;

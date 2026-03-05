@@ -683,6 +683,7 @@ export class BookService {
       const [rentalRows] = await connection.query<Array<{
         rental_id: number;
         book_id: number;
+        book_title: string;
         shop_id: number | null;
         owner_id: number;
         renter_id: number;
@@ -690,9 +691,10 @@ export class BookService {
         status: 'กำลังยืม' | 'รอคืน' | 'คืนแล้ว' | 'เลยกำหนด';
       } & RowDataPacket>>(
         `
-        SELECT rental_id, book_id, shop_id, owner_id, COALESCE(renter_id, borrower_id) AS renter_id, deposit_price, status
-        FROM rentals
-        WHERE rental_id = ?
+        SELECT r.rental_id, r.book_id, b.title AS book_title, r.shop_id, r.owner_id, COALESCE(r.renter_id, r.borrower_id) AS renter_id, r.deposit_price, r.status
+        FROM rentals r
+        JOIN books b ON b.book_id = r.book_id
+        WHERE r.rental_id = ?
         FOR UPDATE
         `,
         [input.rentalId],
@@ -730,6 +732,13 @@ export class BookService {
       await connection.query('UPDATE rentals SET status = ? WHERE rental_id = ?', ['คืนแล้ว', input.rentalId]);
       await connection.query('UPDATE books SET status = ? WHERE book_id = ?', ['Available', rental.book_id]);
       await connection.query('UPDATE users SET balance = ? WHERE user_id = ?', [balanceAfter, rental.renter_id]);
+      await connection.query(
+        `
+        INSERT INTO wallet_transactions (user_id, transaction_type, amount, description, reference_id)
+        VALUES (?, 'REFUND', ?, ?, ?)
+        `,
+        [rental.renter_id, refundedAmount, `คืนเงินมัดจำ: ${rental.book_title}`, input.rentalId],
+      );
 
       await connection.commit();
 

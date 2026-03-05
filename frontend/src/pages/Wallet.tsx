@@ -25,7 +25,7 @@ interface AuthUser {
 
 interface WalletTransaction {
   transactionId: number;
-  type: "TOPUP" | "RENTAL";
+  type: "TOPUP" | "RENTAL" | "REFUND";
   amount: number;
   description: string;
   createdAt: string;
@@ -173,8 +173,8 @@ const WalletPage = () => {
                   ) : (
                     <div>
                       {transactions.map((transaction) => {
-                        const isTopup = transaction.type === "TOPUP";
-                        const amountLabel = `${isTopup ? "+" : ""}${currencyFormatter.format(transaction.amount)}`;
+                        const isCredit = transaction.amount > 0;
+                        const amountLabel = `${isCredit ? "+" : ""}${currencyFormatter.format(transaction.amount)}`;
 
                         return (
                           <div
@@ -184,17 +184,17 @@ const WalletPage = () => {
                             <div className="flex items-center gap-3 min-w-0">
                               <div
                                 className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                                  isTopup ? "bg-green-100 text-green-700" : "bg-rose-100 text-rose-700"
+                                  isCredit ? "bg-green-100 text-green-700" : "bg-rose-100 text-rose-700"
                                 }`}
                               >
-                                {isTopup ? <ArrowDownLeft className="h-5 w-5" /> : <ArrowUpRight className="h-5 w-5" />}
+                                {isCredit ? <ArrowDownLeft className="h-5 w-5" /> : <ArrowUpRight className="h-5 w-5" />}
                               </div>
                               <div className="min-w-0">
                                 <p className="font-medium text-sm text-slate-900 truncate">{transaction.description}</p>
                                 <p className="text-xs text-slate-500">{dateFormatter.format(new Date(transaction.createdAt))}</p>
                               </div>
                             </div>
-                            <div className={`text-sm font-semibold ${isTopup ? "text-green-700" : "text-rose-700"}`}>
+                            <div className={`text-sm font-semibold ${isCredit ? "text-green-700" : "text-rose-700"}`}>
                               ฿{amountLabel}
                             </div>
                           </div>

@@ -92,7 +92,7 @@ const VerifyAccountPage = () => {
         otp: otp.trim(),
       });
       setAuthToken(result.data.token);
-      toast({ title: "ยืนยันตัวตนสำเร็จ" });
+      toast({ title: "สมัครสมาชิกสำเร็จ" });
       navigate("/browse");
     } catch (error) {
       toast({

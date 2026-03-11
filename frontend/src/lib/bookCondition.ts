@@ -1,9 +1,9 @@
 export const conditionOptions = [
   { value: "1", label: "ใหม่เอี่ยม ✨" },
-  { value: "2", label: "ดีมาก" },
-  { value: "3", label: "ดี" },
-  { value: "4", label: "พอใช้" },
-  { value: "5", label: "แย่" },
+  { value: "2", label: "สภาพดี" },
+  { value: "3", label: "มีตำหนิเล็กน้อย" },
+  { value: "4", label: "ชำรุดหนัก" },
+  { value: "5", label: "อ่านได้ก็บุญแล้ว" },
 ] as const;
 
 const conditionMap = new Map(conditionOptions.map((option) => [option.value, option.label]));

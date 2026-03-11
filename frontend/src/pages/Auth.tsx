@@ -81,7 +81,7 @@ const AuthPage = () => {
     if (normalizedPhone && !thaiPhoneRegex.test(normalizedPhone)) {
       toast({
         title: 'เบอร์โทรไม่ถูกต้อง',
-        description: 'รูปแบบเบอร์ไทยต้องขึ้นต้นด้วย 0 และมีทั้งหมด 10 หลัก เช่น 0812345678 (ใส่ขีดได้ ระบบลบให้อัตโนมัติ)',
+        description: 'เบอร์โทรต้องเป็นรูปแบบไทย: 0 ตามด้วยตัวเลขอีก 9 หลัก (เช่น 0812345678) (ใส่ขีดได้ ระบบลบให้อัตโนมัติ)',
         variant: 'destructive',
       });
       return;
@@ -94,7 +94,6 @@ const AuthPage = () => {
         email: normalizedEmail,
         phoneNumber: normalizedPhone,
       });
-      toast({ title: "สมัครสมาชิกสำเร็จ" });
       navigate('/auth/verify', {
         state: {
           pendingSignupId: result.data.pendingSignupId,
@@ -132,7 +131,7 @@ const AuthPage = () => {
                 void handleLogin();
               }}
             >
-              <Input placeholder="Username หรือ Email" value={login} onChange={(e) => setLogin(e.target.value)} />
+              <Input placeholder="ชื่อผู้ใช้ หรือ อีเมล" value={login} onChange={(e) => setLogin(e.target.value)} />
               <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
               <div className="text-right">
                 <Link to="/auth/forgot-password" className="text-sm text-primary hover:underline">
@@ -153,10 +152,10 @@ const AuthPage = () => {
             >
               <Input placeholder="ชื่อ" value={registerForm.firstname} onChange={(e) => setRegisterForm((p) => ({ ...p, firstname: e.target.value }))} />
               <Input placeholder="นามสกุล" value={registerForm.lastname} onChange={(e) => setRegisterForm((p) => ({ ...p, lastname: e.target.value }))} />
-              <Input placeholder="Username" value={registerForm.username} onChange={(e) => setRegisterForm((p) => ({ ...p, username: e.target.value }))} />
-              <Input placeholder="Email" value={registerForm.email} onChange={(e) => setRegisterForm((p) => ({ ...p, email: e.target.value }))} />
+              <Input placeholder="ชื่อผู้ใช้" value={registerForm.username} onChange={(e) => setRegisterForm((p) => ({ ...p, username: e.target.value }))} />
+              <Input placeholder="อีเมล" value={registerForm.email} onChange={(e) => setRegisterForm((p) => ({ ...p, email: e.target.value }))} />
               <Input
-                placeholder="เบอร์โทร (เช่น 081-234-5678)"
+                placeholder="เบอร์โทร (เช่น 0123456789)"
                 value={registerForm.phoneNumber}
                 onChange={(e) => setRegisterForm((p) => ({ ...p, phoneNumber: e.target.value }))}
                 maxLength={12}

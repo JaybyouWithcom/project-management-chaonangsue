@@ -7,6 +7,17 @@ import { sendSuccess } from '../../shared/http/response.js';
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
 
+const normalizeOtp = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    return String(value).padStart(6, '0');
+  }
+  return null;
+};
+
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -65,14 +76,15 @@ export class AuthController {
     if (method !== 'email' && method !== 'phone') {
       throw new AppError('method must be email or phone', 400);
     }
-    if (!isNonEmptyString(otp)) {
+    const normalizedOtp = normalizeOtp(otp);
+    if (!normalizedOtp) {
       throw new AppError('Missing OTP', 400);
     }
 
     const result = await this.authService.verifyOtp({
       pendingSignupId: parsedPendingSignupId,
       method,
-      otp,
+      otp: normalizedOtp,
     });
     sendSuccess(res, result);
   };
@@ -100,11 +112,12 @@ export class AuthController {
 
   resetPassword = async (req: Request, res: Response): Promise<void> => {
     const { email, otp, newPassword } = req.body as Record<string, unknown>;
-    if (!isNonEmptyString(email) || !isNonEmptyString(otp) || !isNonEmptyString(newPassword)) {
+    const normalizedOtp = normalizeOtp(otp);
+    if (!isNonEmptyString(email) || !normalizedOtp || !isNonEmptyString(newPassword)) {
       throw new AppError('Missing required fields', 400);
     }
 
-    await this.authService.resetPassword({ email, otp, newPassword });
+    await this.authService.resetPassword({ email, otp: normalizedOtp, newPassword });
     sendSuccess(res, { message: 'รีเซ็ตรหัสผ่านสำเร็จ' });
   };
 

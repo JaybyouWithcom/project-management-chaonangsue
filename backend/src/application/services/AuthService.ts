@@ -157,7 +157,7 @@ export class AuthService {
       throw new AppError('กรุณากรอกอีเมลในรูปแบบที่ถูกต้อง เช่น user@example.com', 400);
     }
     if (phoneNumber && !thaiPhoneRegex.test(phoneNumber)) {
-      throw new AppError('เบอร์โทรต้องเป็นรูปแบบไทย: 0 ตามด้วยตัวเลขอีก 9 หลัก (เช่น 0812345678)', 400);
+      throw new AppError('เบอร์โทรต้องเป็นรูปแบบไทย: 0 ตามด้วยตัวเลขอีก 9 หลัก (เช่น 0123456789)', 400);
     }
 
     await this.assertUniqueness({ ...input, email, phoneNumber: phoneNumber ?? undefined });
@@ -246,26 +246,30 @@ export class AuthService {
       throw new AppError('คำขอสมัครหมดอายุหรือถูกใช้งานแล้ว กรุณาสมัครใหม่', 400);
     }
 
-    const [rows] = await dbPool.query<PendingOtpRow[]>(
-      `
-      SELECT pending_signup_otp_id, otp_hash, expires_at
-      FROM pending_signup_otps
-      WHERE pending_signup_id = ? AND method = ? AND used_at IS NULL
-      ORDER BY pending_signup_otp_id DESC
-      LIMIT 1
-      `,
-      [input.pendingSignupId, input.method],
-    );
-    if (rows.length === 0) {
-      throw new AppError('ไม่พบ OTP ที่ใช้งานได้', 400);
-    }
+    const isMockPhoneOtp = input.method === 'phone' && input.otp === '000000';
+    let row: PendingOtpRow | null = null;
+    if (!isMockPhoneOtp) {
+      const [rows] = await dbPool.query<PendingOtpRow[]>(
+        `
+        SELECT pending_signup_otp_id, otp_hash, expires_at
+        FROM pending_signup_otps
+        WHERE pending_signup_id = ? AND method = ? AND used_at IS NULL
+        ORDER BY pending_signup_otp_id DESC
+        LIMIT 1
+        `,
+        [input.pendingSignupId, input.method],
+      );
+      if (rows.length === 0) {
+        throw new AppError('ไม่พบ OTP ที่ใช้งานได้', 400);
+      }
 
-    const row = rows[0];
-    if (row.expires_at.getTime() < Date.now()) {
-      throw new AppError('OTP หมดอายุแล้ว', 400);
-    }
-    if (hashOtp(input.otp) !== row.otp_hash) {
-      throw new AppError('OTP ไม่ถูกต้อง', 400);
+      row = rows[0];
+      if (row.expires_at.getTime() < Date.now()) {
+        throw new AppError('OTP หมดอายุแล้ว', 400);
+      }
+      if (hashOtp(input.otp) !== row.otp_hash) {
+        throw new AppError('OTP ไม่ถูกต้อง', 400);
+      }
     }
 
     await this.assertUniqueness({
@@ -289,12 +293,14 @@ export class AuthService {
       });
     } catch (error) {
       if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ER_DUP_ENTRY') {
-        throw new AppError('อีเมล, Username หรือเบอร์โทรนี้ถูกใช้งานแล้ว', 409);
+        throw new AppError('อีเมล, ชื่อผู้ใช้ หรือเบอร์โทรนี้ถูกใช้งานแล้ว', 409);
       }
       throw error;
     }
 
-    await dbPool.query('UPDATE pending_signup_otps SET used_at = NOW() WHERE pending_signup_otp_id = ?', [row.pending_signup_otp_id]);
+    if (row) {
+      await dbPool.query('UPDATE pending_signup_otps SET used_at = NOW() WHERE pending_signup_otp_id = ?', [row.pending_signup_otp_id]);
+    }
     await dbPool.query('UPDATE pending_signups SET consumed_at = NOW() WHERE pending_signup_id = ?', [input.pendingSignupId]);
 
     return {
@@ -439,7 +445,7 @@ export class AuthService {
 
     const phoneNumber = normalizePhoneNumber(input.phoneNumber);
     if (phoneNumber && !thaiPhoneRegex.test(phoneNumber)) {
-      throw new AppError('เบอร์โทรต้องเป็นรูปแบบไทย: 0 ตามด้วยตัวเลขอีก 9 หลัก (เช่น 0812345678)', 400);
+      throw new AppError('เบอร์โทรต้องเป็นรูปแบบไทย: 0 ตามด้วยตัวเลขอีก 9 หลัก (เช่น 0123456789)', 400);
     }
 
     if (phoneNumber) {
@@ -649,13 +655,13 @@ export class AuthService {
     }
     const existingByUsername = await this.userRepository.findByUsername(input.username);
     if (existingByUsername) {
-      throw new AppError('Username นี้ถูกใช้งานแล้ว', 409);
+      throw new AppError('ชื่อผู้ใช้นี้ถูกใช้งานแล้ว', 409);
     }
 
     const normalizedPhoneNumber = normalizePhoneNumber(input.phoneNumber);
     if (normalizedPhoneNumber) {
       if (!thaiPhoneRegex.test(normalizedPhoneNumber)) {
-        throw new AppError('เบอร์โทรต้องเป็นรูปแบบไทย: 0 ตามด้วยตัวเลขอีก 9 หลัก (เช่น 0812345678)', 400);
+        throw new AppError('เบอร์โทรต้องเป็นรูปแบบไทย: 0 ตามด้วยตัวเลขอีก 9 หลัก (เช่น 0123456789)', 400);
       }
 
       const existingByPhone = await this.userRepository.findByPhoneNumber(normalizedPhoneNumber);

@@ -5,18 +5,22 @@ import express from 'express';
 import { AuthService } from './application/services/AuthService.js';
 import { AdminService } from './application/services/AdminService.js';
 import { BookService } from './application/services/BookService.js';
+import { AddressService } from './application/services/AddressService.js';
 import { ShopService } from './application/services/ShopService.js';
 import { AdminController } from './api/controllers/AdminController.js';
 import { AuthController } from './api/controllers/AuthController.js';
 import { BookController } from './api/controllers/BookController.js';
+import { AddressController } from './api/controllers/AddressController.js';
 import { ShopController } from './api/controllers/ShopController.js';
 import { buildAuthMiddleware } from './api/middlewares/authMiddleware.js';
 import { errorHandler } from './api/middlewares/errorHandler.js';
 import { buildAuthRoutes } from './api/routes/authRoutes.js';
 import { buildAdminRoutes } from './api/routes/adminRoutes.js';
 import { buildBookRoutes } from './api/routes/bookRoutes.js';
+import { buildAddressRoutes } from './api/routes/addressRoutes.js';
 import { buildShopRoutes } from './api/routes/shopRoutes.js';
 import { MySqlBookRepository } from './infrastructure/repositories/MySqlBookRepository.js';
+import { MySqlAddressRepository } from './infrastructure/repositories/MySqlAddressRepository.js';
 import { MySqlShopRepository } from './infrastructure/repositories/MySqlShopRepository.js';
 import { MySqlUserRepository } from './infrastructure/repositories/MySqlUserRepository.js';
 
@@ -51,6 +55,10 @@ export const buildApp = () => {
   const shopService = new ShopService(shopRepository);
   const shopController = new ShopController(shopService);
 
+  const addressRepository = new MySqlAddressRepository();
+  const addressService = new AddressService(addressRepository);
+  const addressController = new AddressController(addressService);
+
   const bookRepository = new MySqlBookRepository();
   const bookService = new BookService(bookRepository, shopRepository);
   const bookController = new BookController(bookService);
@@ -62,6 +70,7 @@ export const buildApp = () => {
   app.use('/api/auth', buildAuthRoutes(authController, authMiddleware));
   app.use('/api/admin', buildAdminRoutes(adminController, authMiddleware));
   app.use('/api/books', buildBookRoutes(bookController, authMiddleware));
+  app.use('/api/addresses', buildAddressRoutes(addressController, authMiddleware));
   app.use('/api/shops', buildShopRoutes(shopController, authMiddleware));
 
   app.use(errorHandler);

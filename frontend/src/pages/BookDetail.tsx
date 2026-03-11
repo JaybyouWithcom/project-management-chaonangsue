@@ -1,16 +1,19 @@
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { ArrowLeft, Star, Calendar, Shield, CheckCircle2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { normalizeConditionLabel } from "@/lib/bookCondition";
+import { Address, formatAddressLine, listAddresses } from "@/lib/addresses";
 
 type Plan = "15days" | "30days";
 
@@ -64,8 +67,10 @@ const BookDetail = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const token = getAuthToken();
 
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const detailQuery = useQuery({
@@ -88,17 +93,40 @@ const BookDetail = () => {
 
   const meQuery = useQuery({
     queryKey: ["book-detail-me"],
-    enabled: Boolean(getAuthToken()),
+    enabled: Boolean(token),
     retry: false,
     queryFn: async () => {
-      const token = getAuthToken();
       const response = await apiGet<{ user: { userId: number } }>("/api/auth/me", token ?? undefined);
       return response.data.user;
     },
   });
 
+  const userId = meQuery.data?.userId;
+
+  const addressesQuery = useQuery({
+    queryKey: ["addresses", token],
+    enabled: Boolean(token),
+    retry: false,
+    queryFn: async () => {
+      if (!token) return [] as Address[];
+      return listAddresses(token);
+    },
+  });
+
+  const addresses = addressesQuery.data ?? [];
+
+  useEffect(() => {
+    if (addresses.length === 0) {
+      setSelectedAddressId("");
+      return;
+    }
+    const fallback = addresses.find((item) => item.isDefault) ?? addresses[0];
+    setSelectedAddressId((prev) =>
+      addresses.some((item) => String(item.addressId) === prev) ? prev : String(fallback.addressId),
+    );
+  }, [addresses]);
+
   const handleBooking = async (): Promise<void> => {
-    const token = getAuthToken();
     if (!token) {
       toast({ title: "กรุณา login ก่อนเช่าหนังสือ" });
       navigate('/auth');
@@ -109,6 +137,11 @@ const BookDetail = () => {
       toast({ title: "กรุณาเลือกแผนการเช่า", variant: "destructive" });
       return;
     }
+    if (!selectedAddressId) {
+      toast({ title: "กรุณาเลือกที่อยู่จัดส่ง", variant: "destructive" });
+      return;
+    }
+
     if (detailQuery.data && meQuery.data?.userId === detailQuery.data.ownerId) {
       toast({ title: "ไม่สามารถเช่าหนังสือของร้านตัวเองได้", variant: "destructive" });
       return;
@@ -248,10 +281,40 @@ const BookDetail = () => {
                 </div>
               )}
 
+
+              <div className="space-y-3 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <Label>ที่อยู่จัดส่ง</Label>
+                  {token && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => navigate("/settings")}>
+                      เพิ่มที่อยู่
+                    </Button>
+                  )}
+                </div>
+                {!token ? (
+                  <p className="text-sm text-muted-foreground">กรุณาเข้าสู่ระบบเพื่อเพิ่มที่อยู่จัดส่ง</p>
+                ) : addresses.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">ยังไม่มีที่อยู่จัดส่ง กรุณาเพิ่มที่หน้าการตั้งค่า หรือ กดปุ่มเพิ่มที่อยู่ </p>
+                ) : (
+                  <Select value={selectedAddressId} onValueChange={setSelectedAddressId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="เลือกที่อยู่จัดส่ง" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {addresses.map((address) => (
+                        <SelectItem key={address.addressId} value={String(address.addressId)}>
+                          {(address.label ?? "Home")} • {formatAddressLine(address)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
               <Button
                 className="w-full h-11 text-base font-semibold"
                 onClick={() => { void handleBooking(); }}
-                disabled={!book.status || book.status !== 'Available' || submitting || isOwnBook}
+                disabled={!book.status || book.status !== 'Available' || submitting || isOwnBook || !selectedPlan || !selectedAddressId || !token}
               >
                 {submitting ? "กำลังทำรายการ..." : "จองและชำระเงิน"}
               </Button>
@@ -260,7 +323,7 @@ const BookDetail = () => {
                   นี่คือหนังสือของร้านคุณเอง จึงไม่สามารถเช่าได้
                 </p>
               )}
-              <p className="text-xs text-muted-foreground text-center">* ดูหนังสือได้โดยไม่ต้อง login แต่ต้อง login ก่อนทำรายการเช่า</p>
+              <p className="text-xs text-muted-foreground text-center">* ดูรายละเอียดและราคาหนังสือได้โดยไม่ต้อง login แต่ต้อง login ก่อนทำรายการเช่า</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">

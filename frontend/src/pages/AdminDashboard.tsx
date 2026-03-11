@@ -137,7 +137,7 @@ const AdminDashboard = () => {
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <main className="container mx-auto px-4 py-8 flex-1 space-y-6">
-        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        <h1 className="text-3xl font-bold">แดชบอร์ดแอดมิน</h1>
 
         {!token && (
           <div className="rounded-lg border p-4">
@@ -233,7 +233,7 @@ const AdminDashboard = () => {
             </section>
 
             <section className="rounded-xl border p-4 space-y-3">
-              <h2 className="text-xl font-semibold">จัดการหนังสือ (Delete)</h2>
+              <h2 className="text-xl font-semibold">จัดการหนังสือ</h2>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>

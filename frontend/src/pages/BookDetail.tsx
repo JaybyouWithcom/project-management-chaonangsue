@@ -101,8 +101,6 @@ const BookDetail = () => {
     },
   });
 
-  const userId = meQuery.data?.userId;
-
   const addressesQuery = useQuery({
     queryKey: ["addresses", token],
     enabled: Boolean(token),
@@ -167,7 +165,7 @@ const BookDetail = () => {
 
       toast({
         title: "เช่าหนังสือสำเร็จ",
-        description: `ยอดตัด ฿${result.data.totalAmount} • ยอดคงเหลือ ฿${result.data.balanceAfter}`,
+        description: `ยอดชำระ ฿${result.data.totalAmount} • ยอดคงเหลือ ฿${result.data.balanceAfter}`,
       });
       await queryClient.invalidateQueries({ queryKey: ["auth-me"] });
       await queryClient.invalidateQueries({ queryKey: ["wallet-transactions", token] });
@@ -320,7 +318,7 @@ const BookDetail = () => {
               </Button>
               {isOwnBook && (
                 <p className="text-sm text-center text-muted-foreground">
-                  นี่คือหนังสือของร้านคุณเอง จึงไม่สามารถเช่าได้
+                  ไม่สามารถเช่าหนังสือของร้านตัวเองได้
                 </p>
               )}
               <p className="text-xs text-muted-foreground text-center">* ดูรายละเอียดและราคาหนังสือได้โดยไม่ต้อง login แต่ต้อง login ก่อนทำรายการเช่า</p>

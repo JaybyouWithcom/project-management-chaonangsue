@@ -1,17 +1,22 @@
-import { useMemo, useState } from "react";
-import { Clock, Package, BookOpen, AlertTriangle, CheckCircle, Calendar } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Clock, Package, BookOpen, AlertTriangle, CheckCircle, Calendar, Truck, RotateCcw, RotateCw, Check } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import thailandPostLogo from "@/assets/logistics/thailand-post.png";
+import kerryLogo from "@/assets/logistics/kerry-express.png";
+import flashLogo from "@/assets/logistics/flash-express.png";
+import jtLogo from "@/assets/logistics/jt-express.png";
+import thunderLogo from "@/assets/logistics/thunder-express.png";
 
 const statusColors: Record<string, string> = {
   "รอยืนยัน": "bg-warning/20 text-warning border-warning/30",
@@ -31,33 +36,15 @@ const statusIcons: Record<string, React.ElementType> = {
   "เลยกำหนด": AlertTriangle,
 };
 
-const getDaysRemaining = (endDate: string) => {
-  const diff = new Date(endDate).getTime() - Date.now();
+const receiveSteps = ["ได้รับคำสั่งเช่า", "เตรียมของแล้ว", "จัดส่งแล้ว", "จัดส่งสำเร็จ"];
+const returnSteps = ["ส่งคืนแล้ว", "ส่งคืนสำเร็จ"];
+const carriers = ["ไปรษณีย์ไทย", "Kerry Express", "Flash Express", "J&T Express", "Thunder Express"];
+const carrierLogos = [thailandPostLogo, kerryLogo, flashLogo, jtLogo, thunderLogo];
+
+const getDaysRemaining = (endDate: string, nowMs = Date.now()) => {
+  const diff = new Date(endDate).getTime() - nowMs;
   return Math.ceil(diff / 86400000);
 };
-
-const toLocalDateTimeInputValue = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-};
-
-const fileToDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-        return;
-      }
-      reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
-    };
-    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
-    reader.readAsDataURL(file);
-  });
 
 interface RentalOrder {
   rentalId: number;
@@ -85,24 +72,59 @@ interface RentalOrder {
   returnDeliveryProofPath: string | null;
 }
 
-interface LibraryBook {
-  bookId: number;
-  title: string;
-  author: string;
-  imagePath: string;
-}
-
-type LibraryFilter = "all" | "rented" | "not-rented";
+const StepProgress = ({ steps, completedCount }: { steps: string[]; completedCount: number }) => {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center">
+        {steps.map((step, index) => {
+          const completed = index < completedCount;
+          const active = index === completedCount && completedCount < steps.length;
+          return (
+            <div key={step} className="flex items-center flex-1 min-w-0">
+              <div
+                className={[
+                  "h-8 w-8 rounded-full border flex items-center justify-center shrink-0",
+                  completed ? "bg-primary text-primary-foreground border-primary" : active ? "border-primary text-primary" : "border-muted text-muted-foreground",
+                ].join(" ")}
+              >
+                {completed ? <Check className="h-4 w-4" /> : <span className="text-xs font-semibold">{index + 1}</span>}
+              </div>
+              {index < steps.length - 1 && (
+                <div className="flex-1 h-px mx-2 bg-muted">
+                  <div className={completed ? "h-px bg-primary w-full" : "h-px bg-muted w-full"} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+        {steps.map((step, index) => (
+          <div
+            key={`${step}-label`}
+            className={index < completedCount ? "text-primary font-medium" : "text-muted-foreground"}
+          >
+            {step}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const CustomerDashboard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const token = getAuthToken();
-  const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>("all");
+
+  const [receiveStepById, setReceiveStepById] = useState<Record<number, number>>({});
+  const [returnStepById, setReturnStepById] = useState<Record<number, number>>({});
   const [returningRentalId, setReturningRentalId] = useState<number | null>(null);
-  const [returnProofFile, setReturnProofFile] = useState<File | null>(null);
-  const [returnSentAt, setReturnSentAt] = useState<string>(toLocalDateTimeInputValue(new Date()));
-  const [submittingReturn, setSubmittingReturn] = useState(false);
+  const [returnCarrierById, setReturnCarrierById] = useState<Record<number, string>>({});
+  const [returnTrackingById, setReturnTrackingById] = useState<Record<number, string>>({});
+  const [pausedAtById, setPausedAtById] = useState<Record<number, number>>({});
+  const [startDateOverrideById, setStartDateOverrideById] = useState<Record<number, string>>({});
+  const [endDateOverrideById, setEndDateOverrideById] = useState<Record<number, string>>({});
 
   const { data: orders = [] } = useQuery({
     queryKey: ["my-rentals"],
@@ -112,60 +134,95 @@ const CustomerDashboard = () => {
       return response.data.rentals;
     },
   });
-  const { data: availableBooks = [] } = useQuery({
-    queryKey: ["library-available-books"],
-    enabled: Boolean(token),
-    queryFn: async () => {
-      const response = await apiGet<{ books: LibraryBook[] }>("/api/books?limit=100");
-      return response.data.books;
-    },
-  });
 
-  const activeOrders = orders.filter((o) => !["คืนแล้ว"].includes(o.status));
-  const historyOrders = orders.filter((o) => o.status === "คืนแล้ว");
-  const libraryBooks = useMemo(() => {
-    const rentedByBookId = new Map<number, RentalOrder>();
-    for (const order of orders) {
-      if (!rentedByBookId.has(order.bookId)) {
-        rentedByBookId.set(order.bookId, order);
-      }
-    }
+  const activeOrders = useMemo(
+    () => orders.filter((o) => !["คืนแล้ว"].includes(o.status)),
+    [orders],
+  );
+  const historyOrders = useMemo(
+    () => orders.filter((o) => o.status === "คืนแล้ว"),
+    [orders],
+  );
 
-    const fromAvailable = availableBooks.map((book) => {
-      const rentedOrder = rentedByBookId.get(book.bookId);
-      return {
-        bookId: book.bookId,
-        title: book.title,
-        author: book.author,
-        imagePath: book.imagePath,
-        isRented: Boolean(rentedOrder),
-        canOpenDetail: true,
-      };
+  useEffect(() => {
+    if (activeOrders.length === 0) return;
+
+    setReceiveStepById((prev) => {
+      const next = { ...prev };
+        for (const order of activeOrders) {
+          if (next[order.rentalId] === undefined || next[order.rentalId] === 0) {
+            next[order.rentalId] = 1;
+          }
+        }
+      return next;
     });
 
-    const fromRentedOnly = Array.from(rentedByBookId.values())
-      .filter((order) => !availableBooks.some((book) => book.bookId === order.bookId))
-      .map((order) => ({
-        bookId: order.bookId,
-        title: order.bookTitle,
-        author: order.bookAuthor,
-        imagePath: order.bookCover,
-        isRented: true,
-        canOpenDetail: true,
-      }));
+    const interval = setInterval(() => {
+      setReceiveStepById((prev) => {
+        const next = { ...prev };
+        for (const order of activeOrders) {
+          const current = next[order.rentalId] ?? 1;
+          if (current < receiveSteps.length) {
+            next[order.rentalId] = current + 1;
+          }
+        }
+        return next;
+      });
+    }, 3000);
 
-    return [...fromAvailable, ...fromRentedOnly];
-  }, [availableBooks, orders]);
+    return () => clearInterval(interval);
+  }, [activeOrders]);
 
-  const filteredLibraryBooks = useMemo(() => {
-    if (libraryFilter === "rented") {
-      return libraryBooks.filter((book) => book.isRented);
-    }
-    if (libraryFilter === "not-rented") {
-      return libraryBooks.filter((book) => !book.isRented);
-    }
-    return libraryBooks;
-  }, [libraryBooks, libraryFilter]);
+  useEffect(() => {
+    const deliveredIds = activeOrders
+      .filter((order) => (receiveStepById[order.rentalId] ?? 0) >= receiveSteps.length)
+      .map((order) => order.rentalId);
+
+    if (deliveredIds.length === 0) return;
+
+    setStartDateOverrideById((prev) => {
+      const next = { ...prev };
+      for (const order of activeOrders) {
+        if (!deliveredIds.includes(order.rentalId)) continue;
+        if (!next[order.rentalId]) {
+          next[order.rentalId] = new Date().toISOString();
+        }
+      }
+      return next;
+    });
+
+    setEndDateOverrideById((prev) => {
+      const next = { ...prev };
+      for (const order of activeOrders) {
+        if (!deliveredIds.includes(order.rentalId)) continue;
+        if (!next[order.rentalId]) {
+          const durationMs = new Date(order.endDate).getTime() - new Date(order.startDate).getTime();
+          const startOverride = startDateOverrideById[order.rentalId]
+            ? new Date(startDateOverrideById[order.rentalId])
+            : new Date();
+          next[order.rentalId] = new Date(startOverride.getTime() + durationMs).toISOString();
+        }
+      }
+      return next;
+    });
+  }, [activeOrders, receiveStepById, startDateOverrideById]);
+
+  useEffect(() => {
+    if (Object.keys(returnStepById).length === 0) return;
+    const interval = setInterval(() => {
+      setReturnStepById((prev) => {
+        const next = { ...prev };
+        for (const [key, value] of Object.entries(prev)) {
+          const current = value ?? 1;
+          if (current < returnSteps.length) {
+            next[Number(key)] = current + 1;
+          }
+        }
+        return next;
+      });
+    }, 7000);
+    return () => clearInterval(interval);
+  }, [returnStepById]);
 
   const handlePayFine = async (rentalId: number) => {
     if (!token) {
@@ -197,59 +254,80 @@ const CustomerDashboard = () => {
     }
   };
 
-  const handleSubmitReturn = async (rentalId: number) => {
-    if (!token) {
+  const handleRequestReturn = (order: RentalOrder) => {
+    const carrier = returnCarrierById[order.rentalId];
+    const tracking = (returnTrackingById[order.rentalId] ?? "").trim();
+
+    if (!carrier) {
+      toast({ title: "กรุณาเลือกบริษัทขนส่ง", variant: "destructive" });
       return;
     }
-    if (!returnProofFile) {
+    if (!tracking) {
       toast({
-        title: "กรุณาแนบรูปหลักฐาน",
-        description: "ต้องแนบรูปใบเสร็จ/หลักฐานการส่งคืนก่อนยืนยัน",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!returnSentAt) {
-      toast({
-        title: "กรุณาระบุเวลาที่จัดส่งคืน",
+        title: "Tracking Number ไม่ถูกต้อง",
+        description: "กรุณากรอก Tracking Number",
         variant: "destructive",
       });
       return;
     }
 
-    setSubmittingReturn(true);
-    try {
-      const deliveryProofImageBase64 = await fileToDataUrl(returnProofFile);
-      await apiPost(`/api/books/rentals/${rentalId}/return`, {
-        deliveryProofImageBase64,
-        deliverySentAt: new Date(returnSentAt).toISOString(),
-      }, token);
-
-      toast({ title: "ส่งคำขอคืนหนังสือแล้ว" });
-      setReturningRentalId(null);
-      setReturnProofFile(null);
-      setReturnSentAt(toLocalDateTimeInputValue(new Date()));
-      await queryClient.invalidateQueries({ queryKey: ["my-rentals"] });
-    } catch (error) {
-      toast({
-        title: "ส่งคำขอคืนไม่สำเร็จ",
-        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
-        variant: "destructive",
-      });
-    } finally {
-      setSubmittingReturn(false);
-    }
+    setReturnStepById((prev) => ({ ...prev, [order.rentalId]: 1 }));
+    setPausedAtById((prev) => ({ ...prev, [order.rentalId]: Date.now() }));
+    setReturningRentalId(null);
+    toast({ title: "ส่งคำขอคืนหนังสือแล้ว" });
   };
+
+  const handleRefreshReceiveStep = (rentalId: number) => {
+    setReceiveStepById((prev) => ({ ...prev, [rentalId]: 1 }));
+    setStartDateOverrideById((prev) => {
+      const next = { ...prev };
+      delete next[rentalId];
+      return next;
+    });
+    setEndDateOverrideById((prev) => {
+      const next = { ...prev };
+      delete next[rentalId];
+      return next;
+    });
+    setPausedAtById((prev) => {
+      const next = { ...prev };
+      delete next[rentalId];
+      return next;
+    });
+  };
+
+  const getEffectiveStartDate = (order: RentalOrder) =>
+    startDateOverrideById[order.rentalId] ?? order.startDate;
+
+  const getEffectiveEndDate = (order: RentalOrder) =>
+    endDateOverrideById[order.rentalId] ?? order.endDate;
+
+  const handleCancelReturn = (rentalId: number) => {
+  setReturningRentalId(null);
+  // ล้างค่าบริษัทขนส่ง
+  setReturnCarrierById((prev) => {
+    const next = { ...prev };
+    delete next[rentalId];
+    return next;
+  });
+  // ล้างค่าเลข Tracking
+  setReturnTrackingById((prev) => {
+    const next = { ...prev };
+    delete next[rentalId];
+    return next;
+  });
+};
 
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <div className="container mx-auto px-4 py-8 flex-1">
-        <h1 className="font-display text-3xl md:text-4xl font-bold mb-2">แดชบอร์ดของฉัน</h1>
-        <p className="text-muted-foreground mb-8">ติดตามสถานะการเช่าและประวัติการใช้งาน</p>
+      <div className="container mx-auto px-4 py-8 flex-1 space-y-8">
+        <div>
+          <h1 className="font-display text-3xl md:text-4xl font-bold mb-2">แดชบอร์ดของฉัน</h1>
+          <p className="text-muted-foreground">ติดตามสถานะการเช่าและการส่งคืนแบบเรียลไทม์</p>
+        </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: "กำลังเช่า", value: activeOrders.filter(o => o.status === "กำลังยืม").length, icon: BookOpen, color: "text-primary" },
             { label: "รายการทั้งหมด", value: orders.length, icon: Clock, color: "text-warning" },
@@ -266,47 +344,105 @@ const CustomerDashboard = () => {
           ))}
         </div>
 
-        <Tabs defaultValue="active">
-          <TabsList className="mb-6">
-            <TabsTrigger value="active">คำสั่งเช่าปัจจุบัน ({activeOrders.length})</TabsTrigger>
-            <TabsTrigger value="history">ประวัติ ({historyOrders.length})</TabsTrigger>
-            <TabsTrigger value="library">คลังหนังสือ ({libraryBooks.length})</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="active" className="space-y-4">
-            {activeOrders.map((order) => {
-              const Icon = statusIcons[order.status];
-              const daysLeft = getDaysRemaining(order.endDate);
-              const canRequestReturn = order.status === "กำลังยืม" && new Date(order.endDate).getTime() >= Date.now();
-              return (
-                <div key={order.rentalId} className="bg-card rounded-xl border p-4 md:p-6 flex flex-col md:flex-row gap-4">
-                  <img src={resolveImageUrl(order.bookCover)} alt={order.bookTitle} className="w-20 h-28 rounded-lg object-cover shrink-0" />
-                  <div className="flex-1 space-y-3">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <h3 className="font-display font-semibold text-lg">{order.bookTitle}</h3>
-                        <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
-                      </div>
-                      <Badge className={`${statusColors[order.status]} border`}>
-                        <Icon className="h-3 w-3 mr-1" /> {order.status}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" />
+              ติดตามสถานะรับของ
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {activeOrders.length === 0 ? (
+              <p className="text-muted-foreground">ยังไม่มีคำสั่งเช่าที่ต้องติดตาม</p>
+            ) : (
+              activeOrders.map((order) => (
+                <div key={`receive-${order.rentalId}`} className="rounded-xl border p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-semibold">{order.bookTitle}</p>
+                      <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleRefreshReceiveStep(order.rentalId)}
+                        aria-label="รีเฟรชสถานะรับของ"
+                      >
+                        <RotateCw className="h-4 w-4" />
+                      </Button>
+                      <Badge variant="secondary">
+                        ขั้นตอน {Math.min(receiveStepById[order.rentalId] ?? 1, receiveSteps.length)}/{receiveSteps.length}
                       </Badge>
                     </div>
-                    <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                      <span>รับ: {new Date(order.startDate).toLocaleDateString()}</span>
-                      <span>คืน: {new Date(order.endDate).toLocaleDateString()}</span>
-                      <span className="font-semibold text-foreground">฿{order.totalPrice}</span>
-                    </div>
-                    {order.status === "กำลังยืม" && (
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-muted-foreground">เหลือเวลาอีก</span>
-                          <span className={daysLeft <= 2 ? "text-destructive font-semibold" : "text-primary font-semibold"}>
-                            {daysLeft > 0 ? `${daysLeft} วัน` : "เลยกำหนดแล้ว!"}
-                          </span>
+                  </div>
+                  <StepProgress
+                    steps={receiveSteps}
+                    completedCount={Math.min(receiveStepById[order.rentalId] ?? 1, receiveSteps.length)}
+                  />
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-primary" />
+              คำสั่งเช่าปัจจุบัน
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {activeOrders.length === 0 ? (
+              <p className="text-muted-foreground">ยังไม่มีคำสั่งเช่าปัจจุบัน</p>
+            ) : (
+              activeOrders.map((order) => {
+                const Icon = statusIcons[order.status];
+                const effectiveStart = getEffectiveStartDate(order);
+                const effectiveEnd = getEffectiveEndDate(order);
+                const pausedAt = pausedAtById[order.rentalId];
+                const daysLeft = getDaysRemaining(effectiveEnd, pausedAt ?? Date.now());
+                const delivered = (receiveStepById[order.rentalId] ?? 0) >= receiveSteps.length;
+
+                return (
+                  <div key={order.rentalId} className="bg-card rounded-xl border p-4 md:p-6 space-y-4">
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <img src={resolveImageUrl(order.bookCover)} alt={order.bookTitle} className="w-20 h-28 rounded-lg object-cover shrink-0" />
+                      <div className="flex-1 space-y-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <h3 className="font-display font-semibold text-lg">{order.bookTitle}</h3>
+                            <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
+                          </div>
+                          <Badge className={`${statusColors[order.status]} border`}>
+                            <Icon className="h-3 w-3 mr-1" /> {order.status}
+                          </Badge>
                         </div>
-                        <Progress value={Math.max(0, Math.min(100, (1 - daysLeft / 7) * 100))} className="h-2" />
+                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                          <span>รับ: {delivered ? new Date(effectiveStart).toLocaleDateString() : "—"}</span>
+                          <span>คืน: {delivered ? new Date(effectiveEnd).toLocaleDateString() : "—"}</span>
+                          <span className="font-semibold text-foreground">฿{order.totalPrice}</span>
+                        </div>
+
+                        {delivered ? (
+                          <div>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-muted-foreground">เหลือเวลาเช่า</span>
+                              <span className={daysLeft <= 2 ? "text-destructive font-semibold" : "text-primary font-semibold"}>
+                                {pausedAt ? "หยุดจับเวลาแล้ว" : (daysLeft > 0 ? `${daysLeft} วัน` : "เลยกำหนดแล้ว!")}
+                              </span>
+                            </div>
+                            <Progress value={pausedAt ? 100 : Math.max(0, Math.min(100, (1 - daysLeft / 7) * 100))} className="h-2" />
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">ระบบจะเริ่มนับเวลาเช่าหลังจากที่คุณได้รับหนังสือแล้ว</p>
+                        )}
                       </div>
-                    )}
+                    </div>
+
                     {order.status === "เลยกำหนด" && (
                       <div className="bg-destructive/10 rounded-lg p-3 text-sm">
                         <span className="text-destructive font-semibold">ค่าปรับ: ฿{order.fineAmountDue}</span>
@@ -324,90 +460,126 @@ const CustomerDashboard = () => {
                         )}
                       </div>
                     )}
-                    {order.status === "รอคืน" && (
-                      <div className="bg-accent/10 rounded-lg p-3 text-sm space-y-1">
-                        <p className="font-semibold">ส่งคำขอคืนแล้ว กำลังรอร้านยืนยัน</p>
-                        {order.returnDeliverySentAt && (
-                          <p className="text-muted-foreground">
-                            เวลาจัดส่งคืน: {new Date(order.returnDeliverySentAt).toLocaleString()}
-                          </p>
-                        )}
-                        {order.returnDeliveryProofPath && (
-                          <a
-                            href={resolveImageUrl(order.returnDeliveryProofPath)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-primary underline underline-offset-2"
-                          >
-                            ดูหลักฐานการส่งคืน
-                          </a>
-                        )}
-                      </div>
-                    )}
-                    {canRequestReturn && (
-                      <div className="space-y-3 rounded-lg border p-3">
-                        {returningRentalId !== order.rentalId ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setReturningRentalId(order.rentalId);
-                              setReturnProofFile(null);
-                              setReturnSentAt(toLocalDateTimeInputValue(new Date()));
-                            }}
-                          >
-                            คืนหนังสือ
-                          </Button>
-                        ) : (
-                          <div className="space-y-3">
-                            <div>
-                              <p className="text-sm font-medium mb-1">หลักฐานการส่งคืน</p>
-                              <input
-                                type="file"
-                                accept="image/png,image/jpeg,image/webp"
-                                onChange={(event) => setReturnProofFile(event.target.files?.[0] ?? null)}
-                              />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium mb-1">เวลาที่จัดส่งคืน</p>
-                              <input
-                                type="datetime-local"
-                                value={returnSentAt}
-                                onChange={(event) => setReturnSentAt(event.target.value)}
-                                className="border rounded-md px-2 py-1 bg-background"
-                              />
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => { void handleSubmitReturn(order.rentalId); }}
-                                disabled={submittingReturn}
-                              >
-                                {submittingReturn ? "กำลังส่ง..." : "ยืนยันส่งคืน"}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setReturningRentalId(null);
-                                  setReturnProofFile(null);
-                                }}
-                                disabled={submittingReturn}
-                              >
-                                ยกเลิก
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </TabsContent>
 
-          <TabsContent value="history" className="space-y-4">
+                    
+                      {returningRentalId !== order.rentalId ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setReturningRentalId(order.rentalId)}
+                          disabled={!delivered}
+                        >
+                          คืนหนังสือ
+                        </Button>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <p className="text-sm font-medium mb-1">บริษัทขนส่ง</p>
+                              <Select
+                                value={returnCarrierById[order.rentalId] ?? ""}
+                                onValueChange={(value) =>
+                                  setReturnCarrierById((prev) => ({ ...prev, [order.rentalId]: value }))
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="เลือกบริษัทขนส่ง" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {carriers.map((carrier, index) => (
+                                    <SelectItem key={carrier} value={carrier}>
+                                      <div className="flex items-center gap-2">
+                                        <img
+                                          src={carrierLogos[index]}
+                                          alt={carrier}
+                                          className="h-5 w-9 rounded object-fill bg-white"
+                                        />
+                                        <span>{carrier}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {returnCarrierById[order.rentalId] ? (
+                              <div>
+                                <p className="text-sm font-medium mb-1">Tracking Number</p>
+                                <Input
+                                  value={returnTrackingById[order.rentalId] ?? ""}
+                                  onChange={(event) =>
+                                    setReturnTrackingById((prev) => ({ ...prev, [order.rentalId]: event.target.value }))
+                                  }
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleRequestReturn(order)}
+                              disabled={!returnCarrierById[order.rentalId] || !(returnTrackingById[order.rentalId] ?? "").trim()}
+                            >
+                              ยืนยันการคืนหนังสือ
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleCancelReturn(order.rentalId)}>
+                              ยกเลิก
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-primary" />
+              ติดตามสถานะส่งคืน
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {Object.keys(returnStepById).length === 0 ? (
+              <p className="text-muted-foreground">ยังไม่มีรายการส่งคืน</p>
+            ) : (
+              activeOrders
+                .filter((order) => returnStepById[order.rentalId] !== undefined)
+                .map((order) => (
+                  <div key={`return-${order.rentalId}`} className="rounded-xl border p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-semibold">{order.bookTitle}</p>
+                        <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
+                      </div>
+                      <Badge variant="secondary">
+                        ขั้นตอน {Math.min(returnStepById[order.rentalId] ?? 1, returnSteps.length)}/{returnSteps.length}
+                      </Badge>
+                    </div>
+                    <StepProgress
+                      steps={returnSteps}
+                      completedCount={Math.min(returnStepById[order.rentalId] ?? 1, returnSteps.length)}
+                    />
+                    <div className="text-sm text-muted-foreground">
+                      {returnCarrierById[order.rentalId] ? `บริษัทขนส่ง: ${returnCarrierById[order.rentalId]}` : null}
+                      {returnTrackingById[order.rentalId] ? ` • Tracking Number: ${returnTrackingById[order.rentalId]}` : null}
+                    </div>
+                  </div>
+                ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-primary" />
+              ประวัติการเช่า
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             {historyOrders.map((order) => (
               <div key={order.rentalId} className="bg-card rounded-xl border p-4 md:p-6 flex flex-col md:flex-row gap-4 opacity-80">
                 <img src={resolveImageUrl(order.bookCover)} alt={order.bookTitle} className="w-20 h-28 rounded-lg object-cover shrink-0" />
@@ -430,61 +602,8 @@ const CustomerDashboard = () => {
                 </div>
               </div>
             ))}
-          </TabsContent>
-
-          <TabsContent value="library" className="space-y-4">
-            <div className="flex justify-end">
-              <Select value={libraryFilter} onValueChange={(value) => setLibraryFilter(value as LibraryFilter)}>
-                <SelectTrigger className="w-56">
-                  <SelectValue placeholder="กรองหนังสือ" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">แสดงทั้งหมด</SelectItem>
-                  <SelectItem value="rented">ถูกยืมแล้ว</SelectItem>
-                  <SelectItem value="not-rented">ยังไม่ถูกยืม</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {filteredLibraryBooks.length === 0 ? (
-              <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">
-                ไม่พบหนังสือตามตัวกรองที่เลือก
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {filteredLibraryBooks.map((book) => (
-                  <div
-                    key={book.bookId}
-                    className={`rounded-xl overflow-hidden border bg-card transition-all duration-300 ${book.canOpenDetail ? "hover:shadow-lg hover:-translate-y-1" : "opacity-90"}`}
-                  >
-                    <div className="relative aspect-[3/4] overflow-hidden">
-                      <img
-                        src={resolveImageUrl(book.imagePath)}
-                        alt={book.title}
-                        className={`w-full h-full object-cover ${book.canOpenDetail ? "transition-transform duration-500 hover:scale-105" : ""}`}
-                        loading="lazy"
-                      />
-                      {book.isRented && (
-                        <Badge className="absolute top-2 right-2 bg-warning text-warning-foreground border-0">
-                          ยืมแล้ว
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="p-3">
-                      <p className="font-semibold line-clamp-1">{book.title}</p>
-                      <p className="text-sm text-muted-foreground line-clamp-1">{book.author}</p>
-                      {book.canOpenDetail ? (
-                        <Link to={`/book/${book.bookId}`} className="mt-2 inline-block text-sm text-primary underline underline-offset-2">
-                          ดูรายละเอียด
-                        </Link>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+          </CardContent>
+        </Card>
       </div>
       <Footer />
     </div>

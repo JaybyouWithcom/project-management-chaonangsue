@@ -36,6 +36,7 @@ interface UpdateProfileInput {
   userId: number;
   firstname: string;
   lastname: string;
+  username: string;
   email: string;
   phoneNumber?: string;
 }
@@ -431,7 +432,8 @@ export class AuthService {
 
   async updateProfile(input: UpdateProfileInput): Promise<PublicUser> {
     const email = input.email.trim().toLowerCase();
-    if (!input.firstname.trim() || !input.lastname.trim() || !email) {
+    const username = input.username.trim();
+    if (!input.firstname.trim() || !input.lastname.trim() || !input.username.trim() || !email) {
       throw new AppError('ข้อมูลไม่ครบถ้วน', 400);
     }
     if (!emailRegex.test(email)) {
@@ -441,6 +443,11 @@ export class AuthService {
     const existingUser = await this.userRepository.findByEmail(email);
     if (existingUser && existingUser.userId !== input.userId) {
       throw new AppError('อีเมลนี้ถูกใช้งานแล้วในบัญชีอื่น', 409);
+    }
+
+    const existingByUsername = await this.userRepository.findByUsername(username);
+    if (existingByUsername && existingByUsername.userId !== input.userId) {
+      throw new AppError('ชื่อผู้ใช้นี้ถูกใช้งานแล้ว', 409);
     }
 
     const phoneNumber = normalizePhoneNumber(input.phoneNumber);
@@ -455,12 +462,21 @@ export class AuthService {
       }
     }
 
-    const updated = await this.userRepository.updateProfileById(input.userId, {
-      firstname: input.firstname.trim(),
-      lastname: input.lastname.trim(),
-      email,
-      phoneNumber: phoneNumber ?? null,
-    });
+    let updated: User;
+    try {
+      updated = await this.userRepository.updateProfileById(input.userId, {
+        firstname: input.firstname.trim(),
+        lastname: input.lastname.trim(),
+        username,
+        email,
+        phoneNumber: phoneNumber ?? null,
+      });
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ER_DUP_ENTRY') {
+        throw new AppError('ชื่อผู้ใช้นี้ถูกใช้งานแล้ว', 409);
+      }
+      throw error;
+    }
 
     return toPublicUser(updated);
   }

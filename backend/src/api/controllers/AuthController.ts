@@ -154,10 +154,10 @@ export class AuthController {
     }
 
     // 1. เพิ่ม email เข้าไปใน destructuring
-    const { firstname, lastname, phoneNumber, email } = req.body as Record<string, unknown>;
+    const { firstname, lastname, username, phoneNumber, email } = req.body as Record<string, unknown>;
 
     // 2. เพิ่มการตรวจสอบ email ว่าเป็น String ที่ไม่ว่าง
-    if (!isNonEmptyString(firstname) || !isNonEmptyString(lastname) || !isNonEmptyString(email)) {
+    if (!isNonEmptyString(firstname) || !isNonEmptyString(lastname) || !isNonEmptyString(username) || !isNonEmptyString(email)) {
       throw new AppError('Missing required fields', 400);
     }
 
@@ -165,6 +165,7 @@ export class AuthController {
       userId: req.auth.userId,
       firstname,
       lastname,
+      username,
       email, // 3. ส่ง email ไปยัง service
       phoneNumber: isNonEmptyString(phoneNumber) ? phoneNumber : undefined,
     });

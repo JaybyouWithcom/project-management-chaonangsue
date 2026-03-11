@@ -22,6 +22,10 @@ export const buildBookRoutes = (bookController: BookController, authMiddleware: 
     bookController.requestReturn(req, res).catch(next);
   });
 
+  router.post('/rentals/:rentalId/activate', authMiddleware, (req, res, next) => {
+    bookController.activateRental(req, res).catch(next);
+  });
+
   router.post('/rentals/:rentalId/confirm-return', authMiddleware, (req, res, next) => {
     bookController.confirmReturnByShop(req, res).catch(next);
   });

@@ -3,6 +3,7 @@ import type { CreateUserInput, User } from '../entities/User.js';
 export interface UpdateProfileInput {
   firstname: string;
   lastname: string;
+  username: string;
   email: string;
   phoneNumber: string | null;
 }

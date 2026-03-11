@@ -77,7 +77,7 @@ SET @ensure_start_date_sql = IF(
      AND table_name = 'rentals'
      AND column_name = 'start_date') = 0,
   "ALTER TABLE rentals ADD COLUMN start_date DATETIME NULL",
-  "SELECT 1"
+  "ALTER TABLE rentals MODIFY COLUMN start_date DATETIME NULL"
 );
 PREPARE stmt_ensure_start_date FROM @ensure_start_date_sql;
 EXECUTE stmt_ensure_start_date;
@@ -90,7 +90,7 @@ SET @ensure_due_date_sql = IF(
      AND table_name = 'rentals'
      AND column_name = 'due_date') = 0,
   "ALTER TABLE rentals ADD COLUMN due_date DATETIME NULL",
-  "SELECT 1"
+  "ALTER TABLE rentals MODIFY COLUMN due_date DATETIME NULL"
 );
 PREPARE stmt_ensure_due_date FROM @ensure_due_date_sql;
 EXECUTE stmt_ensure_due_date;
@@ -193,18 +193,12 @@ SET @ensure_status_sql = IF(
    WHERE table_schema = @db_name
      AND table_name = 'rentals'
      AND column_name = 'status') = 0,
-  "ALTER TABLE rentals ADD COLUMN status ENUM('รอจัดส่ง','จัดส่งแล้ว','ได้รับหนังสือแล้ว','กำลังยืม','รอคืน','คืนแล้ว','เลยกำหนด') NOT NULL DEFAULT 'กำลังยืม'",
-  "ALTER TABLE rentals MODIFY COLUMN status ENUM('รอจัดส่ง','จัดส่งแล้ว','ได้รับหนังสือแล้ว','กำลังยืม','รอคืน','คืนแล้ว','เลยกำหนด') NOT NULL DEFAULT 'กำลังยืม'"
+  "ALTER TABLE rentals ADD COLUMN status ENUM('กำลังยืม','รอคืน','คืนแล้ว','เลยกำหนด') NOT NULL DEFAULT 'กำลังยืม'",
+  "ALTER TABLE rentals MODIFY COLUMN status ENUM('กำลังยืม','รอคืน','คืนแล้ว','เลยกำหนด') NOT NULL DEFAULT 'กำลังยืม'"
 );
 PREPARE stmt_ensure_status FROM @ensure_status_sql;
 EXECUTE stmt_ensure_status;
 DEALLOCATE PREPARE stmt_ensure_status;
-
-UPDATE rentals
-SET status = CASE
-  WHEN status IN ('รอจัดส่ง', 'จัดส่งแล้ว', 'ได้รับหนังสือแล้ว') THEN 'กำลังยืม'
-  ELSE status
-END;
 
 SET @add_payment_status_sql = IF(
   (SELECT COUNT(*)

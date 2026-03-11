@@ -80,8 +80,9 @@ interface RentalRow extends RowDataPacket {
   book_price: string;
   renter_name: string;
   renter_id: number;
-  start_date: Date;
-  due_date: Date;
+  start_date: Date | null;
+  due_date: Date | null;
+  rental_plan: RentalPlan;
   rental_price: string;
   commission_rate: string;
   net_rental_amount: string;
@@ -108,8 +109,9 @@ export interface RentalListItem {
   bookPrice: number;
   renterName: string;
   renterId: number;
-  startDate: string;
-  endDate: string;
+  startDate: string | null;
+  endDate: string | null;
+  rentalPlan: RentalPlan;
   rentalPrice: number;
   commissionRate: number;
   netRentalAmount: number;
@@ -136,8 +138,9 @@ const mapRentalRow = (row: RentalRow): RentalListItem => ({
     bookPrice: Number(row.book_price),
     renterName: row.renter_name,
     renterId: row.renter_id,
-    startDate: row.start_date.toISOString(),
-    endDate: row.due_date.toISOString(),
+    startDate: row.start_date ? row.start_date.toISOString() : null,
+    endDate: row.due_date ? row.due_date.toISOString() : null,
+    rentalPlan: row.rental_plan,
     rentalPrice: Number(row.rental_price),
     commissionRate: Number(row.commission_rate),
     netRentalAmount: Number(row.net_rental_amount),
@@ -370,8 +373,8 @@ export class BookService {
           input.userId,
           book.owner_id,
           input.plan,
-          now,
-          dueDate,
+          null,
+          null,
           rentalPrice,
           commissionRate,
           netRentalAmount,
@@ -405,6 +408,80 @@ export class BookService {
     }
   }
 
+  async activateRental(input: {
+    userId: number;
+    rentalId: number;
+  }): Promise<{
+    rentalId: number;
+    startDate: string;
+    endDate: string;
+    status: 'กำลังยืม';
+  }> {
+    const connection = await dbPool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const [rentalRows] = await connection.query<Array<{
+        rental_id: number;
+        renter_id: number;
+        rental_plan: RentalPlan;
+        status: 'กำลังยืม' | 'รอคืน' | 'คืนแล้ว' | 'เลยกำหนด';
+      } & RowDataPacket>>(
+        `
+        SELECT rental_id, COALESCE(renter_id, borrower_id) AS renter_id, rental_plan, status
+        FROM rentals
+        WHERE rental_id = ?
+        FOR UPDATE
+        `,
+        [input.rentalId],
+      );
+
+      if (rentalRows.length === 0) {
+        throw new AppError('Rental not found', 404);
+      }
+
+      const rental = rentalRows[0];
+      if (rental.renter_id !== input.userId) {
+        throw new AppError('Unauthorized', 403);
+      }
+      if (rental.status !== 'กำลังยืม') {
+        throw new AppError('รายการนี้ยังไม่อยู่ในสถานะที่สามารถเริ่มจับเวลา', 400);
+      }
+
+      const now = new Date();
+      const dueDate = new Date(now);
+      dueDate.setDate(dueDate.getDate() + planDaysMap[rental.rental_plan]);
+
+      await connection.query(
+        `
+        UPDATE rentals
+        SET
+          start_date = ?,
+          due_date = ?,
+          status = 'กำลังยืม',
+          past_due_days = 0,
+          fine_paid_at = NULL
+        WHERE rental_id = ?
+        `,
+        [now, dueDate, input.rentalId],
+      );
+
+      await connection.commit();
+
+      return {
+        rentalId: input.rentalId,
+        startDate: now.toISOString(),
+        endDate: dueDate.toISOString(),
+        status: 'กำลังยืม',
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
   async listRentalsByUserId(userId: number): Promise<RentalListItem[]> {
     const [rows] = await dbPool.query<RentalRow[]>(
       `
@@ -420,19 +497,24 @@ export class BookService {
         COALESCE(r.renter_id, r.borrower_id) AS renter_id,
         r.start_date,
         r.due_date,
+        r.rental_plan,
         r.rental_price,
         r.commission_rate,
         r.net_rental_amount,
         r.deposit_price,
         r.total_amount,
         CASE
-          WHEN (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW())) AND r.fine_paid_at IS NULL
+          WHEN r.due_date IS NOT NULL
+            AND (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW()))
+            AND r.fine_paid_at IS NULL
           THEN GREATEST(r.past_due_days, DATEDIFF(NOW(), r.due_date), 1)
           ELSE r.past_due_days
         END AS past_due_days,
         r.fine_paid_at,
         CASE
-          WHEN (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW())) AND r.fine_paid_at IS NULL
+          WHEN r.due_date IS NOT NULL
+            AND (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW()))
+            AND r.fine_paid_at IS NULL
           THEN ROUND((GREATEST(r.past_due_days, DATEDIFF(NOW(), r.due_date), 1) * r.rental_price * 0.30), 2)
           ELSE 0
         END AS fine_amount_due,
@@ -442,7 +524,7 @@ export class BookService {
         r.return_delivery_sent_at,
         r.return_delivery_proof_path,
         CASE
-          WHEN r.status = 'กำลังยืม' AND r.due_date < NOW() THEN 'เลยกำหนด'
+          WHEN r.status = 'กำลังยืม' AND r.due_date IS NOT NULL AND r.due_date < NOW() THEN 'เลยกำหนด'
           ELSE r.status
         END AS status
       FROM rentals r
@@ -477,19 +559,24 @@ export class BookService {
         COALESCE(r.renter_id, r.borrower_id) AS renter_id,
         r.start_date,
         r.due_date,
+        r.rental_plan,
         r.rental_price,
         r.commission_rate,
         r.net_rental_amount,
         r.deposit_price,
         r.total_amount,
         CASE
-          WHEN (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW())) AND r.fine_paid_at IS NULL
+          WHEN r.due_date IS NOT NULL
+            AND (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW()))
+            AND r.fine_paid_at IS NULL
           THEN GREATEST(r.past_due_days, DATEDIFF(NOW(), r.due_date), 1)
           ELSE r.past_due_days
         END AS past_due_days,
         r.fine_paid_at,
         CASE
-          WHEN (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW())) AND r.fine_paid_at IS NULL
+          WHEN r.due_date IS NOT NULL
+            AND (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW()))
+            AND r.fine_paid_at IS NULL
           THEN ROUND((GREATEST(r.past_due_days, DATEDIFF(NOW(), r.due_date), 1) * r.rental_price * 0.30), 2)
           ELSE 0
         END AS fine_amount_due,
@@ -499,7 +586,7 @@ export class BookService {
         r.return_delivery_sent_at,
         r.return_delivery_proof_path,
         CASE
-          WHEN r.status = 'กำลังยืม' AND r.due_date < NOW() THEN 'เลยกำหนด'
+          WHEN r.status = 'กำลังยืม' AND r.due_date IS NOT NULL AND r.due_date < NOW() THEN 'เลยกำหนด'
           ELSE r.status
         END AS status
       FROM rentals r
@@ -531,7 +618,7 @@ export class BookService {
         rental_id: number;
         renter_id: number;
         rental_price: string;
-        due_date: Date;
+        due_date: Date | null;
         status: 'กำลังยืม' | 'รอคืน' | 'คืนแล้ว' | 'เลยกำหนด';
         fine_paid_at: Date | null;
         past_due_days: number;
@@ -552,6 +639,9 @@ export class BookService {
       const rental = rentalRows[0];
       if (rental.renter_id !== input.userId) {
         throw new AppError('Unauthorized', 403);
+      }
+      if (!rental.due_date) {
+        throw new AppError('รายการนี้ยังไม่เริ่มเช่า', 400);
       }
       if (rental.fine_paid_at) {
         throw new AppError('ชำระค่าปรับแล้ว', 400);
@@ -605,14 +695,14 @@ export class BookService {
   async requestReturn(input: {
     userId: number;
     rentalId: number;
-    deliveryProofPath: string;
-    deliverySentAt: Date;
+    deliveryProofPath?: string | null;
+    deliverySentAt?: Date | null;
   }): Promise<{
     rentalId: number;
     status: 'รอคืน';
     returnRequestedAt: string;
-    returnDeliverySentAt: string;
-    returnDeliveryProofPath: string;
+    returnDeliverySentAt: string | null;
+    returnDeliveryProofPath: string | null;
   }> {
     const connection = await dbPool.getConnection();
     try {
@@ -622,7 +712,7 @@ export class BookService {
         rental_id: number;
         renter_id: number;
         status: 'กำลังยืม' | 'รอคืน' | 'คืนแล้ว' | 'เลยกำหนด';
-        due_date: Date;
+        due_date: Date | null;
       } & RowDataPacket>>(
         `
         SELECT rental_id, COALESCE(renter_id, borrower_id) AS renter_id, status, due_date
@@ -647,6 +737,10 @@ export class BookService {
       if (rental.status === 'รอคืน') {
         throw new AppError('คุณได้ส่งคำขอคืนหนังสือแล้ว', 409);
       }
+
+      if (!rental.due_date) {
+        throw new AppError('รายการนี้ยังไม่เริ่มเช่า', 400);
+      }
       if (rental.status === 'เลยกำหนด' || rental.due_date.getTime() < Date.now()) {
         throw new AppError('รายการนี้เลยกำหนดแล้ว ยังไม่เปิดรับการคืนผ่านระบบตอนนี้', 400);
       }
@@ -662,7 +756,7 @@ export class BookService {
           return_delivery_proof_path = ?
         WHERE rental_id = ?
         `,
-        [now, input.deliverySentAt, input.deliveryProofPath, input.rentalId],
+        [now, input.deliverySentAt ?? null, input.deliveryProofPath ?? null, input.rentalId],
       );
 
       await connection.commit();
@@ -671,8 +765,8 @@ export class BookService {
         rentalId: input.rentalId,
         status: 'รอคืน',
         returnRequestedAt: now.toISOString(),
-        returnDeliverySentAt: input.deliverySentAt.toISOString(),
-        returnDeliveryProofPath: input.deliveryProofPath,
+        returnDeliverySentAt: input.deliverySentAt ? input.deliverySentAt.toISOString() : null,
+        returnDeliveryProofPath: input.deliveryProofPath ?? null,
       };
     } catch (error) {
       await connection.rollback();
@@ -775,3 +869,11 @@ export class BookService {
     }
   }
 }
+
+
+
+
+
+
+
+

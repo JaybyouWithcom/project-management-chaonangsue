@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Clock, Package, BookOpen, AlertTriangle, CheckCircle, Calendar, Truck, RotateCcw, RotateCw, Check } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,40 @@ const returnSteps = ["ส่งคืนแล้ว", "ส่งคืนสำ
 const carriers = ["ไปรษณีย์ไทย", "Kerry Express", "Flash Express", "J&T Express", "Thunder Express"];
 const carrierLogos = [thailandPostLogo, kerryLogo, flashLogo, jtLogo, thunderLogo];
 
+type RentalPlan = "15days" | "30days";
+
+const planDaysMap: Record<RentalPlan, number> = {
+  "15days": 15,
+  "30days": 30,
+};
+
+const receiveTrackingStorageKey = "customer-receive-tracking-v1";
+const returnTrackingStorageKey = "customer-return-tracking-v1";
+
+const loadTrackingState = <T,>(key: string, fallback: T): T => {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+};
+
+const saveTrackingState = (key: string, value: unknown) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore storage errors
+  }
+};
+
 const getDaysRemaining = (endDate: string, nowMs = Date.now()) => {
   const diff = new Date(endDate).getTime() - nowMs;
   return Math.ceil(diff / 86400000);
@@ -56,8 +91,9 @@ interface RentalOrder {
   bookPrice: number;
   renterName: string;
   renterId: number;
-  startDate: string;
-  endDate: string;
+  startDate: string | null;
+  endDate: string | null;
+  rentalPlan: RentalPlan;
   rentalPrice: number;
   depositPrice: number;
   status: "กำลังยืม" | "รอคืน" | "คืนแล้ว" | "เลยกำหนด";
@@ -117,14 +153,19 @@ const CustomerDashboard = () => {
   const { toast } = useToast();
   const token = getAuthToken();
 
-  const [receiveStepById, setReceiveStepById] = useState<Record<number, number>>({});
-  const [returnStepById, setReturnStepById] = useState<Record<number, number>>({});
+  type ReceiveTrackingState = Record<number, { step: number; activationSynced: boolean; forceResimulate?: boolean }>;
+
+  const [receiveTrackingById, setReceiveTrackingById] = useState<ReceiveTrackingState>(() =>
+    loadTrackingState<ReceiveTrackingState>(receiveTrackingStorageKey, {}),
+  );
+  const [returnStepById, setReturnStepById] = useState<Record<number, number>>(() =>
+    loadTrackingState<Record<number, number>>(returnTrackingStorageKey, {}),
+  );
   const [returningRentalId, setReturningRentalId] = useState<number | null>(null);
   const [returnCarrierById, setReturnCarrierById] = useState<Record<number, string>>({});
   const [returnTrackingById, setReturnTrackingById] = useState<Record<number, string>>({});
   const [pausedAtById, setPausedAtById] = useState<Record<number, number>>({});
-  const [startDateOverrideById, setStartDateOverrideById] = useState<Record<number, string>>({});
-  const [endDateOverrideById, setEndDateOverrideById] = useState<Record<number, string>>({});
+  const activationInFlightRef = useRef<Record<number, boolean>>({});
 
   const { data: orders = [] } = useQuery({
     queryKey: ["my-rentals"],
@@ -145,26 +186,53 @@ const CustomerDashboard = () => {
   );
 
   useEffect(() => {
-    if (activeOrders.length === 0) return;
-
-    setReceiveStepById((prev) => {
+    setReceiveTrackingById((prev) => {
       const next = { ...prev };
-        for (const order of activeOrders) {
-          if (next[order.rentalId] === undefined || next[order.rentalId] === 0) {
-            next[order.rentalId] = 1;
-          }
+      const activeIds = new Set(activeOrders.map((order) => order.rentalId));
+      for (const order of activeOrders) {
+        const current = next[order.rentalId];
+        if (current?.forceResimulate) {
+          continue;
         }
+        if (order.startDate) {
+          next[order.rentalId] = {
+            step: receiveSteps.length,
+            activationSynced: true,
+          };
+          continue;
+        }
+        if (!current) {
+          next[order.rentalId] = { step: 1, activationSynced: false };
+        }
+      }
+      for (const key of Object.keys(next)) {
+        if (!activeIds.has(Number(key))) {
+          delete next[Number(key)];
+        }
+      }
       return next;
     });
+  }, [activeOrders]);
+
+  useEffect(() => {
+    saveTrackingState(receiveTrackingStorageKey, receiveTrackingById);
+  }, [receiveTrackingById]);
+
+  useEffect(() => {
+    saveTrackingState(returnTrackingStorageKey, returnStepById);
+  }, [returnStepById]);
+
+  useEffect(() => {
+    if (activeOrders.length === 0) return;
 
     const interval = setInterval(() => {
-      setReceiveStepById((prev) => {
+      setReceiveTrackingById((prev) => {
         const next = { ...prev };
         for (const order of activeOrders) {
-          const current = next[order.rentalId] ?? 1;
-          if (current < receiveSteps.length) {
-            next[order.rentalId] = current + 1;
-          }
+          const current = next[order.rentalId];
+          if (!current) continue;
+          if (current.step >= receiveSteps.length) continue;
+          next[order.rentalId] = { ...current, step: current.step + 1 };
         }
         return next;
       });
@@ -174,38 +242,46 @@ const CustomerDashboard = () => {
   }, [activeOrders]);
 
   useEffect(() => {
-    const deliveredIds = activeOrders
-      .filter((order) => (receiveStepById[order.rentalId] ?? 0) >= receiveSteps.length)
-      .map((order) => order.rentalId);
+    if (!token) return;
 
-    if (deliveredIds.length === 0) return;
+    for (const order of activeOrders) {
+      const tracking = receiveTrackingById[order.rentalId];
+      if (!tracking) continue;
+      const completed = tracking.step >= receiveSteps.length;
+      if (!completed) continue;
+      if (tracking.activationSynced) continue;
+      if (order.startDate && !tracking.forceResimulate) continue;
+      if (activationInFlightRef.current[order.rentalId]) continue;
 
-    setStartDateOverrideById((prev) => {
-      const next = { ...prev };
-      for (const order of activeOrders) {
-        if (!deliveredIds.includes(order.rentalId)) continue;
-        if (!next[order.rentalId]) {
-          next[order.rentalId] = new Date().toISOString();
-        }
-      }
-      return next;
-    });
-
-    setEndDateOverrideById((prev) => {
-      const next = { ...prev };
-      for (const order of activeOrders) {
-        if (!deliveredIds.includes(order.rentalId)) continue;
-        if (!next[order.rentalId]) {
-          const durationMs = new Date(order.endDate).getTime() - new Date(order.startDate).getTime();
-          const startOverride = startDateOverrideById[order.rentalId]
-            ? new Date(startDateOverrideById[order.rentalId])
-            : new Date();
-          next[order.rentalId] = new Date(startOverride.getTime() + durationMs).toISOString();
-        }
-      }
-      return next;
-    });
-  }, [activeOrders, receiveStepById, startDateOverrideById]);
+      activationInFlightRef.current[order.rentalId] = true;
+      void apiPost(
+        `/api/books/rentals/${order.rentalId}/activate`,
+        {},
+        token,
+      )
+        .then(async () => {
+          setReceiveTrackingById((prev) => ({
+            ...prev,
+            [order.rentalId]: {
+              step: receiveSteps.length,
+              activationSynced: true,
+              forceResimulate: false,
+            },
+          }));
+          await queryClient.invalidateQueries({ queryKey: ["my-rentals"] });
+        })
+        .catch((error) => {
+          toast({
+            title: "อัปเดตสถานะรับของไม่สำเร็จ",
+            description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+            variant: "destructive",
+          });
+        })
+        .finally(() => {
+          delete activationInFlightRef.current[order.rentalId];
+        });
+    }
+  }, [activeOrders, receiveTrackingById, token, queryClient, toast]);
 
   useEffect(() => {
     if (Object.keys(returnStepById).length === 0) return;
@@ -223,6 +299,22 @@ const CustomerDashboard = () => {
     }, 7000);
     return () => clearInterval(interval);
   }, [returnStepById]);
+
+  useEffect(() => {
+    if (orders.length === 0) return;
+    setPausedAtById((prev) => {
+      const next = { ...prev };
+      for (const order of orders) {
+        if (order.status === "รอคืน" && !next[order.rentalId]) {
+          next[order.rentalId] = Date.now();
+        }
+        if (order.status === "คืนแล้ว" && next[order.rentalId]) {
+          delete next[order.rentalId];
+        }
+      }
+      return next;
+    });
+  }, [orders]);
 
   const handlePayFine = async (rentalId: number) => {
     if (!token) {
@@ -254,7 +346,7 @@ const CustomerDashboard = () => {
     }
   };
 
-  const handleRequestReturn = (order: RentalOrder) => {
+  const handleRequestReturn = async (order: RentalOrder) => {
     const carrier = returnCarrierById[order.rentalId];
     const tracking = (returnTrackingById[order.rentalId] ?? "").trim();
 
@@ -271,24 +363,32 @@ const CustomerDashboard = () => {
       return;
     }
 
-    setReturnStepById((prev) => ({ ...prev, [order.rentalId]: 1 }));
-    setPausedAtById((prev) => ({ ...prev, [order.rentalId]: Date.now() }));
-    setReturningRentalId(null);
-    toast({ title: "ส่งคำขอคืนหนังสือแล้ว" });
+    if (!token) {
+      toast({ title: "กรุณา login ก่อน", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await apiPost(`/api/books/rentals/${order.rentalId}/return`, {}, token);
+      setReturnStepById((prev) => ({ ...prev, [order.rentalId]: 1 }));
+      setPausedAtById((prev) => ({ ...prev, [order.rentalId]: Date.now() }));
+      setReturningRentalId(null);
+      toast({ title: "ส่งคำขอคืนหนังสือแล้ว" });
+      await queryClient.invalidateQueries({ queryKey: ["my-rentals"] });
+    } catch (error) {
+      toast({
+        title: "ส่งคำขอคืนไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleRefreshReceiveStep = (rentalId: number) => {
-    setReceiveStepById((prev) => ({ ...prev, [rentalId]: 1 }));
-    setStartDateOverrideById((prev) => {
-      const next = { ...prev };
-      delete next[rentalId];
-      return next;
-    });
-    setEndDateOverrideById((prev) => {
-      const next = { ...prev };
-      delete next[rentalId];
-      return next;
-    });
+    setReceiveTrackingById((prev) => ({
+      ...prev,
+      [rentalId]: { step: 1, activationSynced: false, forceResimulate: true },
+    }));
     setPausedAtById((prev) => {
       const next = { ...prev };
       delete next[rentalId];
@@ -296,27 +396,21 @@ const CustomerDashboard = () => {
     });
   };
 
-  const getEffectiveStartDate = (order: RentalOrder) =>
-    startDateOverrideById[order.rentalId] ?? order.startDate;
-
-  const getEffectiveEndDate = (order: RentalOrder) =>
-    endDateOverrideById[order.rentalId] ?? order.endDate;
-
   const handleCancelReturn = (rentalId: number) => {
-  setReturningRentalId(null);
-  // ล้างค่าบริษัทขนส่ง
-  setReturnCarrierById((prev) => {
-    const next = { ...prev };
-    delete next[rentalId];
-    return next;
-  });
-  // ล้างค่าเลข Tracking
-  setReturnTrackingById((prev) => {
-    const next = { ...prev };
-    delete next[rentalId];
-    return next;
-  });
-};
+    setReturningRentalId(null);
+    // ล้างค่าบริษัทขนส่ง
+    setReturnCarrierById((prev) => {
+      const next = { ...prev };
+      delete next[rentalId];
+      return next;
+    });
+    // ล้างค่าเลข Tracking
+    setReturnTrackingById((prev) => {
+      const next = { ...prev };
+      delete next[rentalId];
+      return next;
+    });
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -374,13 +468,13 @@ const CustomerDashboard = () => {
                         <RotateCw className="h-4 w-4" />
                       </Button>
                       <Badge variant="secondary">
-                        ขั้นตอน {Math.min(receiveStepById[order.rentalId] ?? 1, receiveSteps.length)}/{receiveSteps.length}
+                        ขั้นตอน {Math.min(receiveTrackingById[order.rentalId]?.step ?? 1, receiveSteps.length)}/{receiveSteps.length}
                       </Badge>
                     </div>
                   </div>
                   <StepProgress
                     steps={receiveSteps}
-                    completedCount={Math.min(receiveStepById[order.rentalId] ?? 1, receiveSteps.length)}
+                    completedCount={Math.min(receiveTrackingById[order.rentalId]?.step ?? 1, receiveSteps.length)}
                   />
                 </div>
               ))
@@ -401,11 +495,25 @@ const CustomerDashboard = () => {
             ) : (
               activeOrders.map((order) => {
                 const Icon = statusIcons[order.status];
-                const effectiveStart = getEffectiveStartDate(order);
-                const effectiveEnd = getEffectiveEndDate(order);
+                const tracking = receiveTrackingById[order.rentalId];
+                const isResimulating = Boolean(tracking?.forceResimulate);
+                const delivered = Boolean(order.startDate && order.endDate && !isResimulating);
                 const pausedAt = pausedAtById[order.rentalId];
-                const daysLeft = getDaysRemaining(effectiveEnd, pausedAt ?? Date.now());
-                const delivered = (receiveStepById[order.rentalId] ?? 0) >= receiveSteps.length;
+                const totalDays = planDaysMap[order.rentalPlan] ?? 15;
+                const daysLeft = delivered && order.endDate
+                  ? getDaysRemaining(order.endDate, pausedAt ?? Date.now())
+                  : null;
+                const isLowTime = daysLeft !== null && daysLeft <= 2;
+                const remainingLabel = pausedAt
+                  ? "หยุดจับเวลาแล้ว"
+                  : daysLeft !== null
+                    ? (daysLeft > 0 ? `${daysLeft} วัน` : "เลยกำหนดแล้ว!")
+                    : "-";
+                const progressValue = pausedAt
+                  ? 100
+                  : daysLeft !== null
+                    ? Math.max(0, Math.min(100, (1 - daysLeft / totalDays) * 100))
+                    : 0;
 
                 return (
                   <div key={order.rentalId} className="bg-card rounded-xl border p-4 md:p-6 space-y-4">
@@ -422,8 +530,8 @@ const CustomerDashboard = () => {
                           </Badge>
                         </div>
                         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                          <span>รับ: {delivered ? new Date(effectiveStart).toLocaleDateString() : "—"}</span>
-                          <span>คืน: {delivered ? new Date(effectiveEnd).toLocaleDateString() : "—"}</span>
+                          <span>รับ: {delivered ? new Date(order.startDate!).toLocaleDateString() : "—"}</span>
+                          <span>คืน: {delivered ? new Date(order.endDate!).toLocaleDateString() : "—"}</span>
                           <span className="font-semibold text-foreground">฿{order.totalPrice}</span>
                         </div>
 
@@ -431,11 +539,11 @@ const CustomerDashboard = () => {
                           <div>
                             <div className="flex justify-between text-xs mb-1">
                               <span className="text-muted-foreground">เหลือเวลาเช่า</span>
-                              <span className={daysLeft <= 2 ? "text-destructive font-semibold" : "text-primary font-semibold"}>
-                                {pausedAt ? "หยุดจับเวลาแล้ว" : (daysLeft > 0 ? `${daysLeft} วัน` : "เลยกำหนดแล้ว!")}
+                              <span className={isLowTime ? "text-destructive font-semibold" : "text-primary font-semibold"}>
+                                {remainingLabel}
                               </span>
                             </div>
-                            <Progress value={pausedAt ? 100 : Math.max(0, Math.min(100, (1 - daysLeft / 7) * 100))} className="h-2" />
+                            <Progress value={progressValue} className="h-2" />
                           </div>
                         ) : (
                           <p className="text-sm text-muted-foreground">ระบบจะเริ่มนับเวลาเช่าหลังจากที่คุณได้รับหนังสือแล้ว</p>
@@ -516,7 +624,7 @@ const CustomerDashboard = () => {
                           <div className="flex gap-2">
                             <Button
                               size="sm"
-                              onClick={() => handleRequestReturn(order)}
+                              onClick={() => { void handleRequestReturn(order); }}
                               disabled={!returnCarrierById[order.rentalId] || !(returnTrackingById[order.rentalId] ?? "").trim()}
                             >
                               ยืนยันการคืนหนังสือ
@@ -592,13 +700,15 @@ const CustomerDashboard = () => {
                     <Badge variant="secondary"><CheckCircle className="h-3 w-3 mr-1" /> คืนแล้ว</Badge>
                   </div>
                   <div className="flex gap-4 text-sm text-muted-foreground mt-2">
-                    <span>{new Date(order.startDate).toLocaleDateString()} — {new Date(order.endDate).toLocaleDateString()}</span>
+                    <span>{new Date(order.startDate!).toLocaleDateString()} — {new Date(order.endDate!).toLocaleDateString()}</span>
                     <span>฿{order.totalPrice}</span>
                   </div>
                   <div className="mt-2 text-sm">
                     <span className="text-success font-medium">คืนมัดจำแล้ว: ฿{order.depositPrice}</span>
                   </div>
-                  <Button variant="outline" size="sm" className="mt-3">เช่าอีกครั้ง</Button>
+                  <Button asChild variant="outline" size="sm" className="mt-3">
+                    <Link to={`/book/${order.bookId}`}>เช่าอีกครั้ง</Link>
+                  </Button>
                 </div>
               </div>
             ))}

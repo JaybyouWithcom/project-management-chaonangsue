@@ -83,6 +83,7 @@ const Settings = () => {
   const [form, setForm] = useState({
     firstname: "",
     lastname: "",
+    username: "",
     phoneNumber: "",
     email: "",
   });
@@ -124,6 +125,7 @@ const Settings = () => {
     setForm({
       firstname: user.firstname,
       lastname: user.lastname,
+      username: user.username,
       phoneNumber: user.phoneNumber ?? "",
       email: user.email,
     });
@@ -236,7 +238,7 @@ const Settings = () => {
     if (!token) return;
 
     // Validation แบบรวบยอด (ตรวจสอบที่หลังบ้านเป็นหลักตามที่คุยกัน)
-    if (!form.firstname.trim() || !form.lastname.trim() || !form.email.trim()) {
+    if (!form.firstname.trim() || !form.lastname.trim() || !form.username.trim() || !form.email.trim()) {
       toast({ title: "ข้อมูลไม่ครบถ้วน", description: "กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน", variant: "destructive" });
       return;
     }
@@ -248,6 +250,7 @@ const Settings = () => {
         {
           firstname: form.firstname,
           lastname: form.lastname,
+          username: form.username,
           phoneNumber: form.phoneNumber.trim() ? normalizeThaiPhone(form.phoneNumber) : undefined,
           email: form.email,
         },
@@ -256,6 +259,10 @@ const Settings = () => {
       await queryClient.invalidateQueries({ queryKey: ["settings-me", token] });
       toast({ title: "บันทึกข้อมูลสำเร็จ" });
     } catch (error) {
+      if (error instanceof HttpError && error.status === 409 && error.message.includes("ชื่อผู้ใช้")) {
+        toast({ title: "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว", variant: "destructive" });
+        return;
+      }
       const errorMessage = error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด";
       toast({ title: "บันทึกข้อมูลไม่สำเร็จ", description: errorMessage, variant: "destructive" });
     } finally {
@@ -362,6 +369,17 @@ const Settings = () => {
                           id="lastname"
                           value={form.lastname}
                           onChange={(event) => setForm((prev) => ({ ...prev, lastname: event.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="username" className="flex items-center gap-2 mb-1.5">
+                          <Tag className="h-4 w-4 text-muted-foreground" /> ชื่อผู้ใช้
+                        </Label>
+                        <Input
+                          id="username"
+                          value={form.username}
+                          onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
                           required
                         />
                       </div>

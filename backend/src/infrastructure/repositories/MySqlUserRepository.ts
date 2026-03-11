@@ -98,16 +98,10 @@ export class MySqlUserRepository implements UserRepository {
     await dbPool.query(
       `
       UPDATE users
-      SET firstname = ?, lastname = ?, email = ?, phone_number = ?
+      SET firstname = ?, lastname = ?, username = ?, email = ?, phone_number = ?
       WHERE user_id = ? AND deleted_at IS NULL
       `,
-      [
-        input.firstname, 
-        input.lastname, 
-        input.email,      // <--- เพิ่มฟิลด์ email ตรงนี้
-        input.phoneNumber, 
-        userId
-      ],
+      [input.firstname, input.lastname, input.username, input.email, input.phoneNumber, userId],
     );
 
     const user = await this.findById(userId);

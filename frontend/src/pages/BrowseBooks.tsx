@@ -116,7 +116,11 @@ const BrowseBooks = () => {
               <SelectTrigger className="w-36"><SelectValue placeholder="สภาพ" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">ทุกสภาพ</SelectItem>
-                {conditions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                {conditions.map((c) => (
+                  <SelectItem key={String(c)} value={String(c)}>
+                    {c}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={sortBy} onValueChange={setSortBy}>

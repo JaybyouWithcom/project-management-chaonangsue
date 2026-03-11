@@ -46,8 +46,8 @@ interface ApiRental {
   bookPrice: number;
   renterName: string;
   renterId: number;
-  startDate: string;
-  endDate: string;
+  startDate: string | null;
+  endDate: string | null;
   rentalPrice: number;
   commissionRate: number;
   netRentalAmount: number;
@@ -663,7 +663,7 @@ const StoreDashboard = () => {
                       <TableCell className="font-mono text-xs">RENT-{rental.rentalId}</TableCell>
                       <TableCell>{rental.renterName}</TableCell>
                       <TableCell>{rental.bookTitle}</TableCell>
-                      <TableCell>{new Date(rental.endDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{rental.endDate ? new Date(rental.endDate).toLocaleDateString() : "-"}</TableCell>
                       <TableCell>
                         <Badge className={`${rentalStatusColors[rental.status]} border-0`}>{rental.status}</Badge>
                       </TableCell>

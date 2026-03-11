@@ -303,24 +303,49 @@ export class BookController {
     }
 
     const { deliveryProofImageBase64, deliverySentAt } = req.body as Record<string, unknown>;
-    if (!isNonEmptyString(deliveryProofImageBase64)) {
-      throw new AppError('กรุณาแนบรูปหลักฐานการส่งคืน', 400);
-    }
-    if (!isNonEmptyString(deliverySentAt)) {
-      throw new AppError('กรุณาระบุเวลาที่จัดส่งคืน', 400);
+    let parsedDeliverySentAt: Date | null = null;
+    let deliveryProofPath: string | null = null;
+
+    const hasProof = isNonEmptyString(deliveryProofImageBase64);
+    const hasDeliverySentAt = isNonEmptyString(deliverySentAt);
+    if (hasProof || hasDeliverySentAt) {
+      if (!hasProof) {
+        throw new AppError('กรุณาแนบรูปหลักฐานการส่งคืน', 400);
+      }
+      if (!hasDeliverySentAt) {
+        throw new AppError('กรุณาระบุเวลาที่จัดส่งคืน', 400);
+      }
+
+      parsedDeliverySentAt = new Date(deliverySentAt as string);
+      if (Number.isNaN(parsedDeliverySentAt.getTime())) {
+        throw new AppError('รูปแบบเวลาจัดส่งคืนไม่ถูกต้อง', 400);
+      }
+
+      deliveryProofPath = await saveReturnProofFromDataUrl(deliveryProofImageBase64 as string);
     }
 
-    const parsedDeliverySentAt = new Date(deliverySentAt);
-    if (Number.isNaN(parsedDeliverySentAt.getTime())) {
-      throw new AppError('รูปแบบเวลาจัดส่งคืนไม่ถูกต้อง', 400);
-    }
-
-    const deliveryProofPath = await saveReturnProofFromDataUrl(deliveryProofImageBase64);
     const result = await this.bookService.requestReturn({
       userId: req.auth.userId,
       rentalId,
       deliveryProofPath,
       deliverySentAt: parsedDeliverySentAt,
+    });
+    sendSuccess(res, result);
+  };
+
+  activateRental = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const rentalId = Number(req.params.rentalId);
+    if (!Number.isInteger(rentalId)) {
+      throw new AppError('Invalid rentalId', 400);
+    }
+
+    const result = await this.bookService.activateRental({
+      userId: req.auth.userId,
+      rentalId,
     });
     sendSuccess(res, result);
   };

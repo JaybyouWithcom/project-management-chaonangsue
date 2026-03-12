@@ -250,7 +250,7 @@ const StoreDashboard = () => {
   const handleSaveBook = async () => {
     const token = getAuthToken();
     if (!token) {
-      toast({ title: "กรุณา login ก่อนลงหนังสือ", variant: "destructive" });
+      toast({ title: "กรุณาเข้าสู่ระบบก่อนลงหนังสือ", variant: "destructive" });
       return;
     }
     if (!hasValidShopId && !editingBook) {
@@ -347,7 +347,7 @@ const StoreDashboard = () => {
     if (!deletingBook) return;
     const token = getAuthToken();
     if (!token) {
-      toast({ title: "กรุณา login ก่อนลบหนังสือ", variant: "destructive" });
+      toast({ title: "กรุณาเข้าสู่ระบบก่อนลบหนังสือ", variant: "destructive" });
       return;
     }
     try {
@@ -385,7 +385,7 @@ const StoreDashboard = () => {
 
   const handleUpdateShop = async () => {
     if (!token) {
-      toast({ title: "กรุณา login ก่อนแก้ไขร้าน", variant: "destructive" });
+      toast({ title: "กรุณาเข้าสู่ระบบก่อนแก้ไขร้าน", variant: "destructive" });
       return;
     }
     if (!selectedShop) return;
@@ -428,7 +428,7 @@ const StoreDashboard = () => {
 
   const handleDeleteShop = async () => {
     if (!token) {
-      toast({ title: "กรุณา login ก่อนลบร้าน", variant: "destructive" });
+      toast({ title: "กรุณาเข้าสู่ระบบก่อนลบร้าน", variant: "destructive" });
       return;
     }
     if (!selectedShop) return;
@@ -448,7 +448,7 @@ const StoreDashboard = () => {
 
   const handleConfirmReturnReceived = async (rentalId: number) => {
     if (!token) {
-      toast({ title: "กรุณา login ก่อน", variant: "destructive" });
+      toast({ title: "กรุณาเข้าสู่ระบบก่อน", variant: "destructive" });
       return;
     }
 

@@ -206,7 +206,7 @@ const CustomerDashboard = () => {
   const handleSubmitReview = async () => {
     if (!token || !reviewingOrder) return;
     if (reviewRating < 1 || reviewRating > 5) {
-      toast({ title: "Please rate 1-5 stars", variant: "destructive" });
+      toast({ title: "ให้คะแนน 1-5 ดาว", variant: "destructive" });
       return;
     }
 
@@ -218,13 +218,13 @@ const CustomerDashboard = () => {
         comment: reviewComment.trim() ? reviewComment.trim() : null,
       }, token);
 
-      toast({ title: "Thanks for your review!" });
+      toast({ title: "ขอบคุณสำหรับความคิดเห็นของคุณ!" });
       setReviewingOrder(null);
       await queryClient.invalidateQueries({ queryKey: ["my-rentals"] });
     } catch (error) {
       toast({
-        title: "Failed to submit review",
-        description: error instanceof HttpError ? error.message : "Something went wrong",
+        title: "ส่งรีวิวไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
         variant: "destructive",
       });
     } finally {
@@ -421,15 +421,15 @@ const CustomerDashboard = () => {
     }
     if (!tracking) {
       toast({
-        title: "Tracking Number ไม่ถูกต้อง",
-        description: "กรุณากรอก Tracking Number",
+        title: "รหัสติดตามพัสดุไม่ถูกต้อง",
+        description: "กรุณากรอกรหัสติดตามพัสดุ",
         variant: "destructive",
       });
       return;
     }
 
     if (!token) {
-      toast({ title: "กรุณา login ก่อน", variant: "destructive" });
+      toast({ title: "กรุณาเข้าสู่ระบบก่อน", variant: "destructive" });
       return;
     }
 
@@ -519,7 +519,7 @@ const CustomerDashboard = () => {
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="font-semibold">{order.bookTitle}</p>
-                      <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
+                      <p className="text-xs text-muted-foreground">เช่า-{order.rentalId}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
@@ -588,7 +588,7 @@ const CustomerDashboard = () => {
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
                             <h3 className="font-display font-semibold text-lg">{order.bookTitle}</h3>
-                            <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
+                            <p className="text-xs text-muted-foreground">เช่า-{order.rentalId}</p>
                           </div>
                           <Badge className={`${statusColors[order.status]} border`}>
                             <Icon className="h-3 w-3 mr-1" /> {order.status}
@@ -636,14 +636,20 @@ const CustomerDashboard = () => {
 
                     
                       {returningRentalId !== order.rentalId ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setReturningRentalId(order.rentalId)}
-                          disabled={!delivered}
-                        >
-                          คืนหนังสือ
-                        </Button>
+                        order.status === "รอคืน" || returnStepById[order.rentalId] !== undefined ? (
+                          <Button variant="secondary" size="sm" disabled>
+                            ยืนยันคืนแล้ว
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setReturningRentalId(order.rentalId)}
+                            disabled={!delivered}
+                          >
+                            คืนหนังสือ
+                          </Button>
+                        )
                       ) : (
                         <div className="space-y-3">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -676,7 +682,7 @@ const CustomerDashboard = () => {
                             </div>
                             {returnCarrierById[order.rentalId] ? (
                               <div>
-                                <p className="text-sm font-medium mb-1">Tracking Number</p>
+                                <p className="text-sm font-medium mb-1">รหัสติดตามพัสดุ</p>
                                 <Input
                                   value={returnTrackingById[order.rentalId] ?? ""}
                                   onChange={(event) =>
@@ -715,7 +721,7 @@ const CustomerDashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {Object.keys(returnStepById).length === 0 ? (
+            {activeOrders.length === 0 ? (
               <p className="text-muted-foreground">ยังไม่มีรายการส่งคืน</p>
             ) : (
               activeOrders
@@ -725,7 +731,7 @@ const CustomerDashboard = () => {
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <p className="font-semibold">{order.bookTitle}</p>
-                        <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
+                        <p className="text-xs text-muted-foreground">เช่า-{order.rentalId}</p>
                       </div>
                       <Badge variant="secondary">
                         ขั้นตอน {Math.min(returnStepById[order.rentalId] ?? 1, returnSteps.length)}/{returnSteps.length}
@@ -737,7 +743,7 @@ const CustomerDashboard = () => {
                     />
                     <div className="text-sm text-muted-foreground">
                       {returnCarrierById[order.rentalId] ? `บริษัทขนส่ง: ${returnCarrierById[order.rentalId]}` : null}
-                      {returnTrackingById[order.rentalId] ? ` • Tracking Number: ${returnTrackingById[order.rentalId]}` : null}
+                      {returnTrackingById[order.rentalId] ? ` • รหัสติดตามพัสดุ: ${returnTrackingById[order.rentalId]}` : null}
                     </div>
                   </div>
                 ))
@@ -760,7 +766,7 @@ const CustomerDashboard = () => {
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <h3 className="font-display font-semibold">{order.bookTitle}</h3>
-                      <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
+                      <p className="text-xs text-muted-foreground">เช่า-{order.rentalId}</p>
                     </div>
                     <Badge variant="secondary"><CheckCircle className="h-3 w-3 mr-1" /> คืนแล้ว</Badge>
                   </div>
@@ -773,15 +779,15 @@ const CustomerDashboard = () => {
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button asChild variant="outline" size="sm">
-                      <Link to={`/book/${order.bookId}`}>Rent again</Link>
+                      <Link to={`/book/${order.bookId}`}>เช่าอีกครั้ง</Link>
                     </Button>
                     {order.reviewId ? (
                       <Button variant="secondary" size="sm" disabled>
-                        Reviewed
+                        รีวิวแล้ว
                       </Button>
                     ) : (
                       <Button variant="outline" size="sm" onClick={() => openReviewDialog(order)}>
-                        Review
+                        เขียนรีวิว
                       </Button>
                     )}
                   </div>
@@ -801,11 +807,11 @@ const CustomerDashboard = () => {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Leave a review</DialogTitle>
+            <DialogTitle>การเช่าครั้งนี้เป็นยังไงบ้าง?</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <p className="text-sm text-muted-foreground">Book: {reviewingOrder?.bookTitle}</p>
+              <p className="text-sm text-muted-foreground">ชื่อหนังสือ: {reviewingOrder?.bookTitle}</p>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1">
@@ -823,22 +829,22 @@ const CustomerDashboard = () => {
                   </button>
                 ))}
               </div>
-              <span className="text-sm text-muted-foreground">{reviewRating > 0 ? `${reviewRating} stars` : "Choose rating"}</span>
+              <span className="text-sm text-muted-foreground">{reviewRating > 0 ? `${reviewRating} ดาว` : "ให้คะแนนการเช่าครั้งนี้"}</span>
             </div>
             <div>
               <Textarea
                 rows={4}
-                placeholder="Leave a short review (optional)"
+                placeholder="แบ่งปันความคิดเห็นของคุณ (ไม่บังคับ)"
                 value={reviewComment}
                 onChange={(event) => setReviewComment(event.target.value)}
               />
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setReviewingOrder(null)} disabled={reviewSubmitting}>
-                Cancel
+                ยกเลิก
               </Button>
               <Button onClick={() => { void handleSubmitReview(); }} disabled={reviewSubmitting}>
-                {reviewSubmitting ? "Sending..." : "Submit review"}
+                {reviewSubmitting ? "กำลังส่ง..." : "ส่งรีวิว"}
               </Button>
             </div>
           </div>
@@ -851,3 +857,4 @@ const CustomerDashboard = () => {
 };
 
 export default CustomerDashboard;
+

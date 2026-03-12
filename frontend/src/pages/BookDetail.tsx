@@ -163,7 +163,7 @@ const BookDetail = () => {
 
   const handleBooking = async (): Promise<void> => {
     if (!token) {
-      toast({ title: "กรุณา login ก่อนเช่าหนังสือ" });
+      toast({ title: "กรุณาเข้าสู่ระบบก่อนเช่าหนังสือ" });
       navigate('/auth');
       return;
     }
@@ -238,12 +238,12 @@ const BookDetail = () => {
         <Dialog open={isAllReviewsOpen} onOpenChange={setIsAllReviewsOpen}>
         <DialogContent className="max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>All reviews</DialogTitle>
+            <DialogTitle>รีวิวทั้งหมด</DialogTitle>
           </DialogHeader>
           {reviewsAllQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading reviews...</p>
+            <p className="text-sm text-muted-foreground">กำลังโหลดรีวิว...</p>
           ) : (reviewsAllQuery.data?.reviews ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No reviews for this book yet</p>
+            <p className="text-sm text-muted-foreground">ยังไม่มีรีวิวสำหรับหนังสือเล่มนี้</p>
           ) : (
             <div className="space-y-3">
               {(reviewsAllQuery.data?.reviews ?? []).map((review) => (
@@ -396,28 +396,28 @@ const BookDetail = () => {
                   ไม่สามารถเช่าหนังสือของร้านตัวเองได้
                 </p>
               )}
-              <p className="text-xs text-muted-foreground text-center">* ดูรายละเอียดและราคาหนังสือได้โดยไม่ต้อง login แต่ต้อง login ก่อนทำรายการเช่า</p>
+              <p className="text-xs text-muted-foreground text-center">* ดูรายละเอียดและราคาหนังสือได้โดยไม่ต้องเข้าสู่ระบบ แต่ต้องเข้าสู่ระบบก่อนทำรายการเช่า</p>
             </div>
 
             <div className="bg-card rounded-xl border p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-bold">Reviews</h3>
+                  <h3 className="text-lg font-bold">รีวิว</h3>
                   <p className="text-sm text-muted-foreground">
-                    {reviewCount > 0 ? `Average ${averageRating.toFixed(1)} from ${reviewCount} reviews` : "No reviews yet"}
+                    {reviewCount > 0 ? `คะแนนเฉลี่ย ${averageRating.toFixed(1)} จาก ${reviewCount} รีวิว` : "ยังไม่มีรีวิวสำหรับหนังสือเล่มนี้"}
                   </p>
                 </div>
                 {reviewCount > previewReviews.length && (
                   <Button variant="outline" size="sm" onClick={() => setIsAllReviewsOpen(true)}>
-                    View all
+                    ดูทั้งหมด
                   </Button>
                 )}
               </div>
 
               {reviewsPreviewQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading reviews...</p>
+                <p className="text-sm text-muted-foreground">กำลังโหลดรีวิว...</p>
               ) : previewReviews.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No reviews for this book yet</p>
+                <p className="text-sm text-muted-foreground">ยังไม่มีรีวิวสำหรับหนังสือเล่มนี้</p>
               ) : (
                 <div className="space-y-3">
                   {previewReviews.map((review) => (
@@ -455,12 +455,12 @@ const BookDetail = () => {
       <Dialog open={isAllReviewsOpen} onOpenChange={setIsAllReviewsOpen}>
         <DialogContent className="max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>All reviews</DialogTitle>
+            <DialogTitle>รีวิวทั้งหมด</DialogTitle>
           </DialogHeader>
           {reviewsAllQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading reviews...</p>
+            <p className="text-sm text-muted-foreground">กำลังโหลดรีวิว...</p>
           ) : (reviewsAllQuery.data?.reviews ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No reviews for this book yet</p>
+            <p className="text-sm text-muted-foreground">ยังไม่มีรีวิวสำหรับหนังสือเล่มนี้</p>
           ) : (
             <div className="space-y-3">
               {(reviewsAllQuery.data?.reviews ?? []).map((review) => (

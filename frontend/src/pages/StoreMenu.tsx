@@ -50,7 +50,7 @@ const StoreMenu = () => {
     if (!token) {
       toast({
         title: "กรุณาเข้าสู่ระบบก่อน",
-        description: "ต้อง login เพื่อสร้างร้าน",
+        description: "ต้องเข้าสู่ระบบเพื่อสร้างร้าน",
         variant: "destructive",
       });
       navigate("/auth");

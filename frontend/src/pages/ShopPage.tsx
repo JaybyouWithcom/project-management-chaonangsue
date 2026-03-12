@@ -92,7 +92,7 @@ const ShopPage = () => {
 
   const handleUpdateShop = async () => {
     if (!token) {
-      toast({ title: "กรุณา login ก่อนแก้ไขร้าน", variant: "destructive" });
+      toast({ title: "กรุณาเข้าสู่ระบบก่อนแก้ไขร้าน", variant: "destructive" });
       return;
     }
     if (!shopQuery.data) return;
@@ -139,7 +139,7 @@ const ShopPage = () => {
 
   const handleDeleteShop = async () => {
     if (!token) {
-      toast({ title: "กรุณา login ก่อนลบร้าน", variant: "destructive" });
+      toast({ title: "กรุณาเข้าสู่ระบบก่อนลบร้าน", variant: "destructive" });
       return;
     }
     if (!shopQuery.data) return;

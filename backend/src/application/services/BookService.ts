@@ -569,8 +569,7 @@ export class BookService {
       JOIN books b ON b.book_id = r.book_id
       JOIN users u ON u.user_id = COALESCE(r.renter_id, r.borrower_id)
       LEFT JOIN reviews rv
-        ON rv.book_id = r.book_id
-        AND rv.user_id = COALESCE(r.renter_id, r.borrower_id)
+        ON rv.rental_id = r.rental_id
       WHERE COALESCE(r.renter_id, r.borrower_id) = ?
       ORDER BY r.created_at DESC
       `,

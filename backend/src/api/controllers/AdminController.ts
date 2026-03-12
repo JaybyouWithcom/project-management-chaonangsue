@@ -7,6 +7,9 @@ import { sendSuccess } from '../../shared/http/response.js';
 const isUserStatusAction = (value: unknown): value is 'BAN' | 'UNBAN' | 'SUSPEND' | 'UNSUSPEND' =>
   value === 'BAN' || value === 'UNBAN' || value === 'SUSPEND' || value === 'UNSUSPEND';
 
+const isReportStatusAction = (value: unknown): value is 'RESOLVE' | 'DISMISS' | 'REOPEN' =>
+  value === 'RESOLVE' || value === 'DISMISS' || value === 'REOPEN';
+
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
@@ -65,5 +68,31 @@ export class AdminController {
 
     await this.adminService.softDeleteBook(req.auth.userId, bookId);
     sendSuccess(res, { deleted: true });
+  };
+
+  updateReportStatus = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const reportId = Number(req.params.reportId);
+    if (!Number.isInteger(reportId) || reportId <= 0) {
+      throw new AppError('Invalid reportId', 400);
+    }
+
+    const { action, adminNote } = req.body as Record<string, unknown>;
+    if (!isReportStatusAction(action)) {
+      throw new AppError('Invalid action', 400);
+    }
+    if (adminNote !== undefined && typeof adminNote !== 'string') {
+      throw new AppError('adminNote must be a string', 400);
+    }
+
+    const report = await this.adminService.updateReportStatus(req.auth.userId, reportId, {
+      action,
+      adminNote: adminNote ?? undefined,
+    });
+
+    sendSuccess(res, { report });
   };
 }

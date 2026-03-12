@@ -7,6 +7,7 @@ import { AdminService } from './application/services/AdminService.js';
 import { BookService } from './application/services/BookService.js';
 import { AddressService } from './application/services/AddressService.js';
 import { ShopService } from './application/services/ShopService.js';
+import { ReportService } from './application/services/ReportService.js';
 import { AdminController } from './api/controllers/AdminController.js';
 import { AuthController } from './api/controllers/AuthController.js';
 import { BookController } from './api/controllers/BookController.js';
@@ -53,7 +54,8 @@ export const buildApp = () => {
 
   const shopRepository = new MySqlShopRepository();
   const shopService = new ShopService(shopRepository);
-  const shopController = new ShopController(shopService);
+  const reportService = new ReportService();
+  const shopController = new ShopController(shopService, reportService);
 
   const addressRepository = new MySqlAddressRepository();
   const addressService = new AddressService(addressRepository);
@@ -61,7 +63,7 @@ export const buildApp = () => {
 
   const bookRepository = new MySqlBookRepository();
   const bookService = new BookService(bookRepository, shopRepository);
-  const bookController = new BookController(bookService);
+  const bookController = new BookController(bookService, reportService);
 
   app.get('/health', (_req, res) => {
     res.status(200).json({ service: 'chaonangsue-backend', status: 'ok' });

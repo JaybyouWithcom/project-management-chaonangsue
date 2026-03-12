@@ -834,7 +834,7 @@ const CustomerDashboard = () => {
             <div>
               <Textarea
                 rows={4}
-                placeholder="แบ่งปันความคิดเห็นของคุณ (ไม่บังคับ)"
+                placeholder="แบ่งปันความคิดเห็นของคุณซักหน่อย"
                 value={reviewComment}
                 onChange={(event) => setReviewComment(event.target.value)}
               />

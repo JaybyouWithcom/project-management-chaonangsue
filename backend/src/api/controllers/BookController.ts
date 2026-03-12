@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Request, Response } from 'express';
 
 import type { BookService } from '../../application/services/BookService.js';
+import type { ReportService } from '../../application/services/ReportService.js';
 import type { RentalPlan } from '../../domain/entities/Book.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import { sendSuccess } from '../../shared/http/response.js';
@@ -62,7 +63,10 @@ const saveReturnProofFromDataUrl = async (imageBase64: string): Promise<string> 
 };
 
 export class BookController {
-  constructor(private readonly bookService: BookService) {}
+  constructor(
+    private readonly bookService: BookService,
+    private readonly reportService: ReportService,
+  ) {}
 
   create = async (req: Request, res: Response): Promise<void> => {
     if (!req.auth?.userId) {
@@ -290,6 +294,33 @@ export class BookController {
     });
 
     sendSuccess(res, result, 201);
+  };
+
+  report = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const bookId = Number(req.params.bookId);
+    if (!Number.isInteger(bookId)) {
+      throw new AppError('Invalid bookId', 400);
+    }
+
+    const { reason, details } = req.body as Record<string, unknown>;
+    if (!isNonEmptyString(reason)) {
+      throw new AppError('reason is required', 400);
+    }
+
+    const trimmedDetails = typeof details === 'string' ? details.trim() : '';
+    const finalDetails = trimmedDetails.length > 0 ? trimmedDetails.slice(0, 1000) : null;
+
+    const reportId = await this.reportService.createBookReport(bookId, {
+      reporterUserId: req.auth.userId,
+      reason: reason.trim().slice(0, 255),
+      details: finalDetails,
+    });
+
+    sendSuccess(res, { reportId }, 201);
   };
 
   delete = async (req: Request, res: Response): Promise<void> => {

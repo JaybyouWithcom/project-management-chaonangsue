@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiDelete, apiGet, apiPatch, HttpError } from "@/lib/api";
@@ -63,11 +64,37 @@ interface AdminShop {
   createdAt: string;
 }
 
+interface AdminReport {
+  reportId: number;
+  reportType: "Book" | "Shop";
+  reason: string;
+  details: string | null;
+  status: "Open" | "Resolved" | "Dismissed";
+  adminNote: string | null;
+  createdAt: string;
+  handledAt: string | null;
+  reporter: {
+    userId: number;
+    username: string;
+  };
+  target: {
+    bookId: number | null;
+    bookTitle: string | null;
+    shopId: number | null;
+    shopName: string | null;
+  };
+  handledBy: {
+    userId: number;
+    username: string;
+  } | null;
+}
+
 interface AdminDashboardResponse {
   summary: AdminSummary;
   users: AdminUser[];
   books: AdminBook[];
   shops: AdminShop[];
+  reports: AdminReport[];
 }
 
 const AdminDashboard = () => {
@@ -75,8 +102,11 @@ const AdminDashboard = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [suspendUntilByUserId, setSuspendUntilByUserId] = useState<Record<number, string>>({});
+  const [shopSearchFilter, setShopSearchFilter] = useState("");
   const [userSearchFilter, setUserSearchFilter] = useState("");
   const [bookSearchFilter, setBookSearchFilter] = useState("");
+  const [reportSearchFilter, setReportSearchFilter] = useState("");
+  const [reportStatusFilter, setReportStatusFilter] = useState<"all" | "Open" | "Resolved" | "Dismissed">("all");
 
   const { data: me } = useQuery({
     queryKey: ["auth-me", token],
@@ -102,6 +132,7 @@ const AdminDashboard = () => {
   const users = data?.users ?? [];
   const books = data?.books ?? [];
   const shops = data?.shops ?? [];
+  const reports = data?.reports ?? [];
   const summary = data?.summary;
 
   const suspendDefault = useMemo(() => {
@@ -137,6 +168,32 @@ const AdminDashboard = () => {
     );
   }, [books, bookSearchFilter]);
 
+  const filteredShops = useMemo(() => {
+    if (!shopSearchFilter.trim()) return shops;
+    const q = shopSearchFilter.toLowerCase();
+    return shops.filter(
+      (s) =>
+        s.shopName.toLowerCase().includes(q) ||
+        s.ownerName.toLowerCase().includes(q)
+    );
+  }, [shops, shopSearchFilter]);
+
+  const filteredReports = useMemo(() => {
+    let items = [...reports];
+    if (reportStatusFilter !== "all") {
+      items = items.filter((r) => r.status === reportStatusFilter);
+    }
+    if (!reportSearchFilter.trim()) return items;
+    const q = reportSearchFilter.toLowerCase();
+    return items.filter((r) =>
+      r.reason.toLowerCase().includes(q) ||
+      (r.details ?? "").toLowerCase().includes(q) ||
+      r.reporter.username.toLowerCase().includes(q) ||
+      (r.target.bookTitle ?? "").toLowerCase().includes(q) ||
+      (r.target.shopName ?? "").toLowerCase().includes(q)
+    );
+  }, [reports, reportSearchFilter, reportStatusFilter]);
+
   const handleUserAction = async (
     userId: number,
     action: "BAN" | "UNBAN" | "SUSPEND" | "UNSUSPEND",
@@ -170,6 +227,22 @@ const AdminDashboard = () => {
     } catch (error) {
       toast({
         title: "ลบหนังสือไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleReportAction = async (reportId: number, action: "RESOLVE" | "DISMISS" | "REOPEN") => {
+    if (!token) return;
+
+    try {
+      await apiPatch(`/api/admin/reports/${reportId}`, { action }, token);
+      toast({ title: "อัปเดตรายงานสำเร็จ" });
+      await queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+    } catch (error) {
+      toast({
+        title: "อัปเดตรายงานไม่สำเร็จ",
         description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
         variant: "destructive",
       });
@@ -318,6 +391,116 @@ const AdminDashboard = () => {
               </Card>
             </div>
 
+            {/* Reports Section */}
+            <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-primary" />
+                    รายงาน ({reports.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <Input
+                      placeholder="ค้นหาสาเหตุ, รายละเอียด, ผู้รายงาน..."
+                      value={reportSearchFilter}
+                      onChange={(e) => setReportSearchFilter(e.target.value)}
+                      className="max-w-sm"
+                    />
+                    <Select value={reportStatusFilter} onValueChange={(value) => setReportStatusFilter(value as typeof reportStatusFilter)}>
+                      <SelectTrigger className="w-44">
+                        <SelectValue placeholder="สถานะรายงาน" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">ทั้งหมด</SelectItem>
+                        <SelectItem value="Open">ยังไม่จัดการ</SelectItem>
+                        <SelectItem value="Resolved">แก้ไขแล้ว</SelectItem>
+                        <SelectItem value="Dismissed">ปฏิเสธ</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ID</TableHead>
+                          <TableHead>ประเภท</TableHead>
+                          <TableHead>เป้าหมาย</TableHead>
+                          <TableHead>ผู้รายงาน</TableHead>
+                          <TableHead>สาเหตุ</TableHead>
+                          <TableHead>รายละเอียด</TableHead>
+                          <TableHead>สถานะ</TableHead>
+                          <TableHead>เวลารายงาน</TableHead>
+                          <TableHead>จัดการ</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredReports.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={9} className="text-center text-muted-foreground">
+                              ยังไม่มีรายงานเข้ามา
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredReports.map((report) => (
+                            <TableRow key={report.reportId}>
+                              <TableCell className="text-sm">{report.reportId}</TableCell>
+                              <TableCell className="text-sm">
+                                {report.reportType === "Book" ? "Book" : "Shop"}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {report.reportType === "Book" && report.target.bookId ? (
+                                  <Link to={`/book/${report.target.bookId}`} className="underline underline-offset-2">
+                                    {report.target.bookTitle ?? `Book #${report.target.bookId}`}
+                                  </Link>
+                                ) : report.target.shopId ? (
+                                  <Link to={`/shop/${report.target.shopId}`} className="underline underline-offset-2">
+                                    {report.target.shopName ?? `Shop #${report.target.shopId}`}
+                                  </Link>
+                                ) : (
+                                  "-"
+                                )}
+                              </TableCell>
+                              <TableCell className="text-sm">{report.reporter.username}</TableCell>
+                              <TableCell className="text-sm">{report.reason}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground max-w-[240px]">
+                                {report.details ?? "-"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={report.status === "Open" ? "destructive" : report.status === "Resolved" ? "secondary" : "outline"}
+                                >
+                                  {report.status === "Open" ? "Open" : report.status === "Resolved" ? "Resolved" : "Dismissed"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {new Date(report.createdAt).toLocaleString("th-TH")}
+                              </TableCell>
+                              <TableCell>
+                                {report.status === "Open" ? (
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button size="sm" onClick={() => void handleReportAction(report.reportId, "RESOLVE")}>
+                                      Resolve
+                                    </Button>
+                                    <Button size="sm" variant="outline" onClick={() => void handleReportAction(report.reportId, "DISMISS")}>
+                                      Dismiss
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button size="sm" variant="outline" onClick={() => void handleReportAction(report.reportId, "REOPEN")}>
+                                    Reopen
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+            </Card>
+
             {/* Shops Section */}
             {shops.length > 0 && (
               <Card>
@@ -327,7 +510,13 @@ const AdminDashboard = () => {
                     ร้านค้า ({shops.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  <Input
+                    placeholder="ค้นหาชื่อร้าน, เจ้าของ..."
+                    value={shopSearchFilter}
+                    onChange={(e) => setShopSearchFilter(e.target.value)}
+                    className="max-w-sm"
+                  />
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -340,7 +529,7 @@ const AdminDashboard = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {shops.map((shop) => (
+                        {filteredShops.map((shop) => (
                           <TableRow key={shop.shopId}>
                             <TableCell className="text-sm">{shop.shopId}</TableCell>
                             <TableCell className="font-medium">{shop.shopName}</TableCell>
@@ -368,7 +557,7 @@ const AdminDashboard = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <Input
-                  placeholder="ค้นหาชื่อผู้ใช้, อีเมล, ชื่อ..."
+                  placeholder="ค้นหาชื่อผู้ใช้, อีเมล..."
                   value={userSearchFilter}
                   onChange={(e) => setUserSearchFilter(e.target.value)}
                   className="max-w-sm"
@@ -406,8 +595,27 @@ const AdminDashboard = () => {
                             <TableCell className="text-sm">
                               {user.suspendedUntil ? new Date(user.suspendedUntil).toLocaleString("th-TH") : "-"}
                             </TableCell>
-                            <TableCell className="space-y-2">
-                              <div className="flex flex-wrap gap-2">
+                            <TableCell>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {user.role !== "Admin" && (
+                                  <>
+                                    <Input
+                                      type="datetime-local"
+                                      size={1}
+                                      className="h-9 text-xs w-auto"
+                                      value={suspendUntilByUserId[user.userId] ?? ""}
+                                      onChange={(event) =>
+                                        setSuspendUntilByUserId((prev) => ({ ...prev, [user.userId]: event.target.value }))
+                                      }
+                                    />
+                                    <Button
+                                      size="sm"
+                                      onClick={() => void handleUserAction(user.userId, "SUSPEND")}
+                                    >
+                                      ระงับ
+                                    </Button>
+                                  </>
+                                )}
                                 {user.role === "Banned" ? (
                                   <Button
                                     size="sm"
@@ -426,36 +634,15 @@ const AdminDashboard = () => {
                                   </Button>
                                 ) : null}
                                 {user.role !== "Admin" && (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => void handleUserAction(user.userId, "UNSUSPEND")}
-                                    >
-                                      ยกเลิกระงับ
-                                    </Button>
-                                  </>
-                                )}
-                              </div>
-                              {user.role !== "Admin" && (
-                                <div className="flex gap-2 flex-wrap">
-                                  <Input
-                                    type="datetime-local"
-                                    size={1}
-                                    className="h-9 text-xs"
-                                    value={suspendUntilByUserId[user.userId] ?? ""}
-                                    onChange={(event) =>
-                                      setSuspendUntilByUserId((prev) => ({ ...prev, [user.userId]: event.target.value }))
-                                    }
-                                  />
                                   <Button
                                     size="sm"
-                                    onClick={() => void handleUserAction(user.userId, "SUSPEND")}
+                                    variant="outline"
+                                    onClick={() => void handleUserAction(user.userId, "UNSUSPEND")}
                                   >
-                                    ระงับ
+                                    ยกเลิกระงับ
                                   </Button>
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}

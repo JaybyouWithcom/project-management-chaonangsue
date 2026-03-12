@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Request, Response } from 'express';
 
 import type { ShopService } from '../../application/services/ShopService.js';
+import type { ReportService } from '../../application/services/ReportService.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import { sendSuccess } from '../../shared/http/response.js';
 
@@ -29,7 +30,10 @@ const saveImageFromDataUrl = async (imageBase64: string): Promise<string> => {
 };
 
 export class ShopController {
-  constructor(private readonly shopService: ShopService) {}
+  constructor(
+    private readonly shopService: ShopService,
+    private readonly reportService: ReportService,
+  ) {}
 
   detail = async (req: Request, res: Response): Promise<void> => {
     const shopId = Number(req.params.shopId);
@@ -115,5 +119,32 @@ export class ShopController {
 
     await this.shopService.delete({ userId: req.auth.userId, shopId });
     sendSuccess(res, { deleted: true });
+  };
+
+  report = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const shopId = Number(req.params.shopId);
+    if (!Number.isInteger(shopId) || shopId <= 0) {
+      throw new AppError('shopId must be an integer', 400);
+    }
+
+    const { reason, details } = req.body as Record<string, unknown>;
+    if (!isNonEmptyString(reason)) {
+      throw new AppError('reason is required', 400);
+    }
+
+    const trimmedDetails = typeof details === 'string' ? details.trim() : '';
+    const finalDetails = trimmedDetails.length > 0 ? trimmedDetails.slice(0, 1000) : null;
+
+    const reportId = await this.reportService.createShopReport(shopId, {
+      reporterUserId: req.auth.userId,
+      reason: reason.trim().slice(0, 255),
+      details: finalDetails,
+    });
+
+    sendSuccess(res, { reportId }, 201);
   };
 }

@@ -1,5 +1,5 @@
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { ArrowLeft, Star, Calendar, Shield, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Star, Calendar, Shield, CheckCircle2, Flag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
@@ -91,6 +92,17 @@ const BookDetail = () => {
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [isAllReviewsOpen, setIsAllReviewsOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDetails, setReportDetails] = useState("");
+
+  const reportReasons = [
+    "สภาพหนังสือไม่ตรงตามที่ระบุไว้",
+    "ได้รับหนังสือผิด",
+    "หนังสือละเมิดลิขสิทธิ์",
+    "หนังสือที่ไม่เหมาะสม",
+    "อื่นๆ (ระบุรายละเอียด)",
+  ];
 
   const detailQuery = useQuery({
     queryKey: ["book", id],
@@ -218,6 +230,48 @@ const BookDetail = () => {
     }
   };
 
+  const resetReportForm = () => {
+    setReportReason("");
+    setReportDetails("");
+  };
+
+  const handleSubmitReport = async () => {
+    if (!reportReason) {
+      toast({ title: "กรุณาเลือกสาเหตุที่ต้องการรายงาน", variant: "destructive" });
+      return;
+    }
+    if (reportReason === "อื่นๆ (ระบุรายละเอียด)" && !reportDetails.trim()) {
+      toast({ title: "กรุณาระบุรายละเอียดเพิ่มเติม", variant: "destructive" });
+      return;
+    }
+
+    if (!token) {
+      toast({ title: "กรุณาเข้าสู่ระบบก่อนส่งรายงาน", variant: "destructive" });
+      navigate("/auth");
+      return;
+    }
+    if (!id) {
+      toast({ title: "ไม่พบรหัสหนังสือ", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await apiPost(`/api/books/${id}/report`, {
+        reason: reportReason,
+        details: reportDetails.trim() ? reportDetails.trim() : null,
+      }, token);
+      toast({ title: "ส่งรายงานเรียบร้อยแล้ว" });
+      setIsReportOpen(false);
+      resetReportForm();
+    } catch (error) {
+      toast({
+        title: "ส่งรายงานไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (detailQuery.isLoading) {
     return <div className="min-h-screen"><Navbar /><div className="container mx-auto px-4 py-10">กำลังโหลด...</div></div>;
   }
@@ -295,7 +349,17 @@ const BookDetail = () => {
           </div>
 
           <div className="space-y-6">
-            <div>
+            <div className="relative pr-24">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="absolute right-0 top-0"
+                onClick={() => setIsReportOpen(true)}
+              >
+                <Flag className="mr-2 h-4 w-4" />
+                รายงาน
+              </Button>
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant="secondary">{book.genre ?? 'อื่นๆ'}</Badge>
                 <Badge className="bg-accent text-accent-foreground border-0">{normalizeConditionLabel(book.bookCondition)}</Badge>
@@ -392,7 +456,7 @@ const BookDetail = () => {
                 {submitting ? "กำลังทำรายการ..." : "จองและชำระเงิน"}
               </Button>
               {isOwnBook && (
-                <p className="text-sm text-center text-muted-foreground">
+                <p className="text-sm text-center text-foreground">
                   ไม่สามารถเช่าหนังสือของร้านตัวเองได้
                 </p>
               )}
@@ -452,6 +516,56 @@ const BookDetail = () => {
           </div>
         </div>
       </div>
+      <Dialog
+        open={isReportOpen}
+        onOpenChange={(open) => {
+          setIsReportOpen(open);
+          if (!open) resetReportForm();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>รายงานหนังสือ</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>สาเหตุที่รายงาน</Label>
+              <Select value={reportReason} onValueChange={setReportReason}>
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="เลือกสาเหตุ" />
+                </SelectTrigger>
+                <SelectContent>
+                  {reportReasons.map((reason) => (
+                    <SelectItem key={reason} value={reason}>
+                      {reason}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="report-details">รายละเอียดเพิ่มเติม</Label>
+              <Textarea
+                id="report-details"
+                rows={4}
+                value={reportDetails}
+                onChange={(event) => setReportDetails(event.target.value)}
+                placeholder="อธิบายเพิ่มเติมเพื่อช่วยให้ทีมงานตรวจสอบได้เร็วขึ้น"
+                className="mt-2"
+              />
+              {reportReason === "อื่นๆ (ระบุรายละเอียด)" && (
+                <p className="text-xs text-muted-foreground mt-2">กรุณาระบุรายละเอียดเพิ่มเติมเมื่อเลือก "อื่นๆ"</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsReportOpen(false)}>
+                ยกเลิก
+              </Button>
+              <Button onClick={handleSubmitReport}>ส่งรายงาน</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={isAllReviewsOpen} onOpenChange={setIsAllReviewsOpen}>
         <DialogContent className="max-h-[80vh] overflow-y-auto">
           <DialogHeader>

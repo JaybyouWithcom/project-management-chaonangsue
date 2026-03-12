@@ -349,7 +349,7 @@ const Settings = () => {
                 <CardContent className="space-y-6">
                   {user.role === "Admin" && (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
-                      ผู้ดูแลร้านไม่สามารถแก้ไขข้อมูลบัญชีได้
+                      ผู้ดูแลไม่สามารถแก้ไขข้อมูลบัญชีได้
                     </div>
                   )}
                   {/* Form แก้ไขข้อมูล */}

@@ -20,5 +20,9 @@ export const buildAdminRoutes = (adminController: AdminController, authMiddlewar
     adminController.softDeleteBook(req, res).catch(next);
   });
 
+  router.patch('/reports/:reportId', (req, res, next) => {
+    adminController.updateReportStatus(req, res).catch(next);
+  });
+
   return router;
 };

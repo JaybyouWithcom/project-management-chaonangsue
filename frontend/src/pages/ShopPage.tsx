@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronDown, Edit, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, Edit, Search, SlidersHorizontal, Trash2, Flag } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import Navbar from "@/components/Navbar";
@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { apiDelete, apiGet, apiPatch, HttpError, resolveImageUrl } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
 import { conditions, genres } from "@/lib/mockData";
 import { type ApiBook, toUiBook } from "@/lib/books";
 import { useToast } from "@/hooks/use-toast";
@@ -51,6 +51,17 @@ const ShopPage = () => {
   const [shopForm, setShopForm] = useState({ shopName: "", description: "" });
   const [shopImageFile, setShopImageFile] = useState<File | null>(null);
   const [deleteShopConfirm, setDeleteShopConfirm] = useState("");
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDetails, setReportDetails] = useState("");
+
+  const reportReasons = [
+    "ปัญหาการสื่อสาร/การตอบแชท",
+    "ปัญหาการจัดส่ง",
+    "คิดค่าปรับอย่างไม่เป็นธรรม",
+    "ปก/ชื่อร้านไม่เหมาะสม",
+    "อื่นๆ (ระบุรายละเอียด)",
+  ];
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -160,6 +171,48 @@ const ShopPage = () => {
     }
   };
 
+  const resetReportForm = () => {
+    setReportReason("");
+    setReportDetails("");
+  };
+
+  const handleSubmitReport = async () => {
+    if (!reportReason) {
+      toast({ title: "กรุณาเลือกสาเหตุที่ต้องการรายงาน", variant: "destructive" });
+      return;
+    }
+    if (reportReason === "อื่นๆ (ระบุรายละเอียด)" && !reportDetails.trim()) {
+      toast({ title: "กรุณาระบุรายละเอียดเพิ่มเติม", variant: "destructive" });
+      return;
+    }
+
+    if (!token) {
+      toast({ title: "กรุณาเข้าสู่ระบบก่อนส่งรายงาน", variant: "destructive" });
+      navigate("/auth");
+      return;
+    }
+    if (!hasValidShopId) {
+      toast({ title: "ไม่พบรหัสร้าน", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await apiPost(`/api/shops/${parsedShopId}/report`, {
+        reason: reportReason,
+        details: reportDetails.trim() ? reportDetails.trim() : null,
+      }, token);
+      toast({ title: "ส่งรายงานเรียบร้อยแล้ว" });
+      setIsReportOpen(false);
+      resetReportForm();
+    } catch (error) {
+      toast({
+        title: "ส่งรายงานไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
+  };
+
   const booksQuery = useQuery({
     queryKey: ["shop-books", parsedShopId, search],
     enabled: hasValidShopId,
@@ -220,31 +273,43 @@ const ShopPage = () => {
                 className="h-52 w-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
-              {canShowShopActions && (
-                <div className="absolute right-4 top-4 flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="icon"
-                    className="h-9 w-9 bg-white/90 text-foreground hover:bg-white"
-                    onClick={openEditShopDialog}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="icon"
-                    className="h-9 w-9 bg-destructive/90 hover:bg-destructive"
-                    onClick={() => {
-                      setDeleteShopConfirm("");
-                      setDeleteShopOpen(true);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
+              <div className="absolute right-4 top-4 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="h-9 w-9 bg-white/90 text-foreground hover:bg-white"
+                  aria-label="รายงานร้าน"
+                  onClick={() => setIsReportOpen(true)}
+                >
+                  <Flag className="h-4 w-4" />
+                </Button>
+                {canShowShopActions && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      className="h-9 w-9 bg-white/90 text-foreground hover:bg-white"
+                      onClick={openEditShopDialog}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="h-9 w-9 bg-destructive/90 hover:bg-destructive"
+                      onClick={() => {
+                        setDeleteShopConfirm("");
+                        setDeleteShopOpen(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
               <div className="absolute inset-x-0 bottom-0 p-5 text-white">
                 <h1 className="font-display text-3xl md:text-4xl font-bold">{shopQuery.data.shopName}</h1>
                 {shopQuery.data.description && (
@@ -329,6 +394,57 @@ const ShopPage = () => {
                     <Button variant="destructive" disabled={!canDeleteShop} onClick={handleDeleteShop}>
                       ลบร้าน
                     </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog
+              open={isReportOpen}
+              onOpenChange={(open) => {
+                setIsReportOpen(open);
+                if (!open) resetReportForm();
+              }}
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>รายงานร้าน</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label>สาเหตุที่รายงาน</Label>
+                    <Select value={reportReason} onValueChange={setReportReason}>
+                      <SelectTrigger className="mt-2">
+                        <SelectValue placeholder="เลือกสาเหตุ" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {reportReasons.map((reason) => (
+                          <SelectItem key={reason} value={reason}>
+                            {reason}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="shop-report-details">รายละเอียดเพิ่มเติม</Label>
+                    <Textarea
+                      id="shop-report-details"
+                      rows={4}
+                      value={reportDetails}
+                      onChange={(event) => setReportDetails(event.target.value)}
+                      placeholder="อธิบายเพิ่มเติมเพื่อช่วยให้ทีมงานตรวจสอบได้เร็วขึ้น"
+                      className="mt-2"
+                    />
+                    {reportReason === "อื่นๆ (ระบุรายละเอียด)" && (
+                      <p className="text-xs text-muted-foreground mt-2">กรุณาระบุรายละเอียดเพิ่มเติมเมื่อเลือก "อื่นๆ"</p>
+                    )}
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setIsReportOpen(false)}>
+                      ยกเลิก
+                    </Button>
+                    <Button onClick={handleSubmitReport}>ส่งรายงาน</Button>
                   </div>
                 </div>
               </DialogContent>

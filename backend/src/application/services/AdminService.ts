@@ -5,6 +5,7 @@ import { AppError } from '../../shared/errors/AppError.js';
 
 type UserRole = 'Customer' | 'Admin' | 'Banned';
 type UserStatusAction = 'BAN' | 'UNBAN' | 'SUSPEND' | 'UNSUSPEND';
+type ReportStatusAction = 'RESOLVE' | 'DISMISS' | 'REOPEN';
 
 interface AdminUserRow extends RowDataPacket {
   user_id: number;
@@ -61,6 +62,25 @@ interface ShopRow extends RowDataPacket {
   created_at: Date;
 }
 
+interface ReportRow extends RowDataPacket {
+  report_id: number;
+  report_type: 'Book' | 'Shop';
+  reason: string;
+  details: string | null;
+  status: 'Open' | 'Resolved' | 'Dismissed';
+  admin_note: string | null;
+  created_at: Date;
+  handled_at: Date | null;
+  reporter_id: number;
+  reporter_username: string;
+  book_id: number | null;
+  book_title: string | null;
+  shop_id: number | null;
+  shop_name: string | null;
+  handled_by_id: number | null;
+  handled_by_username: string | null;
+}
+
 interface WalletStatsRow extends RowDataPacket {
   total_user_balance: string;
   average_user_balance: string;
@@ -100,6 +120,31 @@ export interface AdminShopItem {
   createdAt: string;
 }
 
+export interface AdminReportItem {
+  reportId: number;
+  reportType: 'Book' | 'Shop';
+  reason: string;
+  details: string | null;
+  status: 'Open' | 'Resolved' | 'Dismissed';
+  adminNote: string | null;
+  createdAt: string;
+  handledAt: string | null;
+  reporter: {
+    userId: number;
+    username: string;
+  };
+  target: {
+    bookId: number | null;
+    bookTitle: string | null;
+    shopId: number | null;
+    shopName: string | null;
+  };
+  handledBy: {
+    userId: number;
+    username: string;
+  } | null;
+}
+
 export interface AdminDashboardSummary {
   totalUsers: number;
   activeUsers: number;
@@ -119,6 +164,7 @@ export interface AdminDashboardData {
   users: AdminUserItem[];
   books: AdminBookItem[];
   shops: AdminShopItem[];
+  reports: AdminReportItem[];
 }
 
 const mapAdminUser = (row: AdminUserRow): AdminUserItem => ({
@@ -153,6 +199,33 @@ const mapAdminShop = (row: ShopRow): AdminShopItem => ({
   ownerName: row.owner_name,
   bookCount: row.book_count,
   createdAt: row.created_at.toISOString(),
+});
+
+const mapAdminReport = (row: ReportRow): AdminReportItem => ({
+  reportId: row.report_id,
+  reportType: row.report_type,
+  reason: row.reason,
+  details: row.details,
+  status: row.status,
+  adminNote: row.admin_note,
+  createdAt: row.created_at.toISOString(),
+  handledAt: row.handled_at ? row.handled_at.toISOString() : null,
+  reporter: {
+    userId: row.reporter_id,
+    username: row.reporter_username,
+  },
+  target: {
+    bookId: row.book_id,
+    bookTitle: row.book_title,
+    shopId: row.shop_id,
+    shopName: row.shop_name,
+  },
+  handledBy: row.handled_by_id
+    ? {
+      userId: row.handled_by_id,
+      username: row.handled_by_username ?? 'admin',
+    }
+    : null,
 });
 
 export class AdminService {
@@ -269,6 +342,35 @@ export class AdminService {
       `,
     );
 
+    const [reports] = await dbPool.query<ReportRow[]>(
+      `
+      SELECT
+        r.report_id,
+        r.report_type,
+        r.reason,
+        r.details,
+        r.status,
+        r.admin_note,
+        r.created_at,
+        r.handled_at,
+        reporter.user_id AS reporter_id,
+        reporter.username AS reporter_username,
+        b.book_id,
+        b.title AS book_title,
+        s.shop_id,
+        s.shop_name,
+        handler.user_id AS handled_by_id,
+        handler.username AS handled_by_username
+      FROM reports r
+      JOIN users reporter ON reporter.user_id = r.reporter_user_id
+      LEFT JOIN books b ON b.book_id = r.book_id
+      LEFT JOIN shops s ON s.shop_id = r.shop_id
+      LEFT JOIN users handler ON handler.user_id = r.handled_by
+      ORDER BY r.created_at DESC
+      LIMIT 200
+      `,
+    );
+
     const summaryRow = summaryRows[0];
     const commissionRow = commissionRows[0];
     const bookCountRow = bookCountRows[0];
@@ -292,6 +394,7 @@ export class AdminService {
       users: users.map(mapAdminUser),
       books: books.map(mapAdminBook),
       shops: shops.map(mapAdminShop),
+      reports: reports.map(mapAdminReport),
     };
   }
 
@@ -393,5 +496,81 @@ export class AdminService {
     if (result.affectedRows === 0) {
       throw new AppError('Book not found or already deleted', 404);
     }
+  }
+
+  async updateReportStatus(
+    adminUserId: number,
+    reportId: number,
+    input: { action: ReportStatusAction; adminNote?: string | null },
+  ): Promise<AdminReportItem> {
+    await this.assertAdmin(adminUserId);
+
+    const [rows] = await dbPool.query<Array<{ report_id: number } & RowDataPacket>>(
+      'SELECT report_id FROM reports WHERE report_id = ? LIMIT 1',
+      [reportId],
+    );
+    if (rows.length === 0) {
+      throw new AppError('Report not found', 404);
+    }
+
+    const nextAdminNote = input.adminNote !== undefined
+      ? (input.adminNote && input.adminNote.trim().length > 0 ? input.adminNote.trim().slice(0, 1000) : null)
+      : undefined;
+
+    if (input.action === 'RESOLVE' || input.action === 'DISMISS') {
+      const nextStatus = input.action === 'RESOLVE' ? 'Resolved' : 'Dismissed';
+      await dbPool.query(
+        `
+        UPDATE reports
+        SET status = ?, handled_by = ?, handled_at = NOW(), admin_note = COALESCE(?, admin_note)
+        WHERE report_id = ?
+        `,
+        [nextStatus, adminUserId, nextAdminNote ?? null, reportId],
+      );
+    } else if (input.action === 'REOPEN') {
+      await dbPool.query(
+        `
+        UPDATE reports
+        SET status = 'Open', handled_by = NULL, handled_at = NULL, admin_note = COALESCE(?, admin_note)
+        WHERE report_id = ?
+        `,
+        [nextAdminNote ?? null, reportId],
+      );
+    }
+
+    const [reportRows] = await dbPool.query<ReportRow[]>(
+      `
+      SELECT
+        r.report_id,
+        r.report_type,
+        r.reason,
+        r.details,
+        r.status,
+        r.admin_note,
+        r.created_at,
+        r.handled_at,
+        reporter.user_id AS reporter_id,
+        reporter.username AS reporter_username,
+        b.book_id,
+        b.title AS book_title,
+        s.shop_id,
+        s.shop_name,
+        handler.user_id AS handled_by_id,
+        handler.username AS handled_by_username
+      FROM reports r
+      JOIN users reporter ON reporter.user_id = r.reporter_user_id
+      LEFT JOIN books b ON b.book_id = r.book_id
+      LEFT JOIN shops s ON s.shop_id = r.shop_id
+      LEFT JOIN users handler ON handler.user_id = r.handled_by
+      WHERE r.report_id = ?
+      LIMIT 1
+      `,
+      [reportId],
+    );
+    if (reportRows.length === 0) {
+      throw new AppError('Report not found', 404);
+    }
+
+    return mapAdminReport(reportRows[0]);
   }
 }

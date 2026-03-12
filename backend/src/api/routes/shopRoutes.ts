@@ -26,5 +26,9 @@ export const buildShopRoutes = (shopController: ShopController, authMiddleware: 
     shopController.delete(req, res).catch(next);
   });
 
+  router.post('/:shopId/report', authMiddleware, (req, res, next) => {
+    shopController.report(req, res).catch(next);
+  });
+
   return router;
 };

@@ -38,6 +38,10 @@ export const buildBookRoutes = (bookController: BookController, authMiddleware: 
     bookController.detail(req, res).catch(next);
   });
 
+  router.get('/:bookId/reviews', (req, res, next) => {
+    bookController.listReviews(req, res).catch(next);
+  });
+
   router.get('/:bookId/quote', (req, res, next) => {
     bookController.quote(req, res).catch(next);
   });
@@ -56,6 +60,10 @@ export const buildBookRoutes = (bookController: BookController, authMiddleware: 
 
   router.post('/:bookId/rent', authMiddleware, (req, res, next) => {
     bookController.rent(req, res).catch(next);
+  });
+
+  router.post('/:bookId/reviews', authMiddleware, (req, res, next) => {
+    bookController.createReview(req, res).catch(next);
   });
 
   return router;

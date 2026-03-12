@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
@@ -32,6 +33,23 @@ interface BookDetailData {
   bookPrice: string;
   status: "Available" | "Rented";
   ownerName: string;
+  ratingAverage: number;
+  reviewCount: number;
+}
+
+interface BookReview {
+  reviewId: number;
+  bookId: number;
+  userId: number;
+  username: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+interface ReviewSummary {
+  averageRating: number;
+  reviewCount: number;
 }
 
 interface QuoteData {
@@ -72,6 +90,7 @@ const BookDetail = () => {
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [isAllReviewsOpen, setIsAllReviewsOpen] = useState(false);
 
   const detailQuery = useQuery({
     queryKey: ["book", id],
@@ -112,6 +131,24 @@ const BookDetail = () => {
   });
 
   const addresses = addressesQuery.data ?? [];
+
+  const reviewsPreviewQuery = useQuery({
+    queryKey: ["book-reviews", id, "preview"],
+    enabled: Boolean(id),
+    queryFn: async () => {
+      const response = await apiGet<{ reviews: BookReview[]; summary: ReviewSummary }>(`/api/books/${id}/reviews?limit=3`);
+      return response.data;
+    },
+  });
+
+  const reviewsAllQuery = useQuery({
+    queryKey: ["book-reviews", id, "all"],
+    enabled: Boolean(id && isAllReviewsOpen),
+    queryFn: async () => {
+      const response = await apiGet<{ reviews: BookReview[]; summary: ReviewSummary }>(`/api/books/${id}/reviews?limit=50`);
+      return response.data;
+    },
+  });
 
   useEffect(() => {
     if (addresses.length === 0) {
@@ -198,13 +235,51 @@ const BookDetail = () => {
             </Button>
           </div>
         </div>
-        <Footer />
+        <Dialog open={isAllReviewsOpen} onOpenChange={setIsAllReviewsOpen}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>All reviews</DialogTitle>
+          </DialogHeader>
+          {reviewsAllQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading reviews...</p>
+          ) : (reviewsAllQuery.data?.reviews ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">No reviews for this book yet</p>
+          ) : (
+            <div className="space-y-3">
+              {(reviewsAllQuery.data?.reviews ?? []).map((review) => (
+                <div key={review.reviewId} className="rounded-lg border p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold">{review.username}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(review.createdAt).toLocaleDateString("th-TH")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 text-accent">
+                      <Star className="h-4 w-4 fill-current" />
+                      <span className="text-sm font-semibold">{review.rating}</span>
+                    </div>
+                  </div>
+                  {review.comment && (
+                    <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">{review.comment}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Footer />
       </div>
     );
   }
 
   const book = detailQuery.data;
   const isOwnBook = Boolean(meQuery.data?.userId && meQuery.data.userId === book.ownerId);
+  const averageRating = Number(book.ratingAverage ?? 0);
+  const reviewCount = Number(book.reviewCount ?? 0);
+  const previewReviews = reviewsPreviewQuery.data?.reviews ?? [];
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -242,7 +317,7 @@ const BookDetail = () => {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1 text-accent">
                 <Star className="h-5 w-5 fill-current" />
-                <span className="text-lg font-bold">4.5</span>
+                <span className="text-lg font-bold">{reviewCount > 0 ? averageRating.toFixed(1) : "0.0"}</span>
               </div>
               <span className="text-sm text-muted-foreground">สถานะ: {book.status === 'Available' ? 'พร้อมให้เช่า' : 'ไม่พร้อม'}</span>
             </div>
@@ -324,6 +399,50 @@ const BookDetail = () => {
               <p className="text-xs text-muted-foreground text-center">* ดูรายละเอียดและราคาหนังสือได้โดยไม่ต้อง login แต่ต้อง login ก่อนทำรายการเช่า</p>
             </div>
 
+            <div className="bg-card rounded-xl border p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold">Reviews</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {reviewCount > 0 ? `Average ${averageRating.toFixed(1)} from ${reviewCount} reviews` : "No reviews yet"}
+                  </p>
+                </div>
+                {reviewCount > previewReviews.length && (
+                  <Button variant="outline" size="sm" onClick={() => setIsAllReviewsOpen(true)}>
+                    View all
+                  </Button>
+                )}
+              </div>
+
+              {reviewsPreviewQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading reviews...</p>
+              ) : previewReviews.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No reviews for this book yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {previewReviews.map((review) => (
+                    <div key={review.reviewId} className="rounded-lg border p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold">{review.username}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(review.createdAt).toLocaleDateString("th-TH")}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 text-accent">
+                          <Star className="h-4 w-4 fill-current" />
+                          <span className="text-sm font-semibold">{review.rating}</span>
+                        </div>
+                      </div>
+                      {review.comment && (
+                        <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">{review.comment}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4 text-primary" /> จัดส่งภายใน 1-2 วัน</div>
               <div className="flex items-center gap-2 text-muted-foreground"><Shield className="h-4 w-4 text-primary" /> ระบบมัดจำปลอดภัย</div>
@@ -333,6 +452,41 @@ const BookDetail = () => {
           </div>
         </div>
       </div>
+      <Dialog open={isAllReviewsOpen} onOpenChange={setIsAllReviewsOpen}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>All reviews</DialogTitle>
+          </DialogHeader>
+          {reviewsAllQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading reviews...</p>
+          ) : (reviewsAllQuery.data?.reviews ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">No reviews for this book yet</p>
+          ) : (
+            <div className="space-y-3">
+              {(reviewsAllQuery.data?.reviews ?? []).map((review) => (
+                <div key={review.reviewId} className="rounded-lg border p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold">{review.username}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(review.createdAt).toLocaleDateString("th-TH")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 text-accent">
+                      <Star className="h-4 w-4 fill-current" />
+                      <span className="text-sm font-semibold">{review.rating}</span>
+                    </div>
+                  </div>
+                  {review.comment && (
+                    <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">{review.comment}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Footer />
     </div>
   );

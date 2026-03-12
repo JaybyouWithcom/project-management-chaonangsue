@@ -14,6 +14,8 @@ export interface ApiBook {
   status: "Available" | "Rented";
   ownerName: string;
   description: string | null;
+  ratingAverage: number;
+  reviewCount: number;
 }
 
 export const toUiBook = (book: ApiBook): UiBook => ({
@@ -28,6 +30,6 @@ export const toUiBook = (book: ApiBook): UiBook => ({
   deposit: Math.round(Number(book.bookPrice) * 0.5),
   description: book.description ?? "",
   available: book.status === "Available",
-  rating: 4.5,
-  totalRentals: 0,
+  rating: Number(book.ratingAverage ?? 0),
+  totalRentals: Number(book.reviewCount ?? 0),
 });

@@ -17,6 +17,8 @@ export interface Book {
   status: BookStatus;
   createdAt: Date;
   ownerName: string;
+  ratingAverage: number;
+  reviewCount: number;
 }
 
 export interface CreateBookInput {

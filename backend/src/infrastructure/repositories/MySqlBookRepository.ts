@@ -20,13 +20,25 @@ interface BookRow extends RowDataPacket {
   status: 'Available' | 'Rented';
   created_at: Date;
   owner_name: string;
+  rating_avg: string | null;
+  review_count: number | null;
 }
 
 const baseSelect = `
-  SELECT b.*, u.username AS owner_name, s.shop_name
+  SELECT
+    b.*,
+    u.username AS owner_name,
+    s.shop_name,
+    COALESCE(r.rating_avg, 0) AS rating_avg,
+    COALESCE(r.review_count, 0) AS review_count
   FROM books b
   JOIN users u ON u.user_id = b.owner_id
   LEFT JOIN shops s ON s.shop_id = b.shop_id
+  LEFT JOIN (
+    SELECT book_id, AVG(rating) AS rating_avg, COUNT(*) AS review_count
+    FROM reviews
+    GROUP BY book_id
+  ) r ON r.book_id = b.book_id
 `;
 
 const mapBook = (row: BookRow): Book => ({
@@ -45,6 +57,8 @@ const mapBook = (row: BookRow): Book => ({
   status: row.status,
   createdAt: row.created_at,
   ownerName: row.owner_name,
+  ratingAverage: Number(row.rating_avg ?? 0),
+  reviewCount: Number(row.review_count ?? 0),
 });
 
 export class MySqlBookRepository implements BookRepository {

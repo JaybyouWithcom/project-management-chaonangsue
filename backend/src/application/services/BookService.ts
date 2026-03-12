@@ -97,6 +97,8 @@ interface RentalRow extends RowDataPacket {
   return_requested_at: Date | null;
   return_delivery_sent_at: Date | null;
   return_delivery_proof_path: string | null;
+  review_id: number | null;
+  review_rating: number | null;
 }
 
 export interface RentalListItem {
@@ -126,6 +128,8 @@ export interface RentalListItem {
   returnRequestedAt: string | null;
   returnDeliverySentAt: string | null;
   returnDeliveryProofPath: string | null;
+  reviewId: number | null;
+  reviewRating: number | null;
 }
 
 const mapRentalRow = (row: RentalRow): RentalListItem => ({
@@ -155,6 +159,38 @@ const mapRentalRow = (row: RentalRow): RentalListItem => ({
     returnRequestedAt: row.return_requested_at ? row.return_requested_at.toISOString() : null,
     returnDeliverySentAt: row.return_delivery_sent_at ? row.return_delivery_sent_at.toISOString() : null,
     returnDeliveryProofPath: row.return_delivery_proof_path,
+    reviewId: row.review_id,
+    reviewRating: row.review_rating !== null ? Number(row.review_rating) : null,
+});
+
+interface ReviewRow extends RowDataPacket {
+  review_id: number;
+  book_id: number;
+  user_id: number;
+  username: string;
+  rating: number;
+  comment: string | null;
+  created_at: Date;
+}
+
+export interface ReviewListItem {
+  reviewId: number;
+  bookId: number;
+  userId: number;
+  username: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+const mapReviewRow = (row: ReviewRow): ReviewListItem => ({
+  reviewId: row.review_id,
+  bookId: row.book_id,
+  userId: row.user_id,
+  username: row.username,
+  rating: Number(row.rating),
+  comment: row.comment,
+  createdAt: row.created_at.toISOString(),
 });
 
 export class BookService {
@@ -523,6 +559,8 @@ export class BookService {
         r.return_requested_at,
         r.return_delivery_sent_at,
         r.return_delivery_proof_path,
+        rv.review_id,
+        rv.rating AS review_rating,
         CASE
           WHEN r.status = 'กำลังยืม' AND r.due_date IS NOT NULL AND r.due_date < NOW() THEN 'เลยกำหนด'
           ELSE r.status
@@ -530,6 +568,9 @@ export class BookService {
       FROM rentals r
       JOIN books b ON b.book_id = r.book_id
       JOIN users u ON u.user_id = COALESCE(r.renter_id, r.borrower_id)
+      LEFT JOIN reviews rv
+        ON rv.book_id = r.book_id
+        AND rv.user_id = COALESCE(r.renter_id, r.borrower_id)
       WHERE COALESCE(r.renter_id, r.borrower_id) = ?
       ORDER BY r.created_at DESC
       `,
@@ -585,6 +626,8 @@ export class BookService {
         r.return_requested_at,
         r.return_delivery_sent_at,
         r.return_delivery_proof_path,
+        NULL AS review_id,
+        NULL AS review_rating,
         CASE
           WHEN r.status = 'กำลังยืม' AND r.due_date IS NOT NULL AND r.due_date < NOW() THEN 'เลยกำหนด'
           ELSE r.status
@@ -599,6 +642,107 @@ export class BookService {
     );
 
     return rows.map(mapRentalRow);
+  }
+
+  async listReviewsByBook(bookId: number, page: number, limit: number): Promise<{
+    items: ReviewListItem[];
+    total: number;
+    summary: { averageRating: number; reviewCount: number };
+  }> {
+    await this.getById(bookId);
+
+    const [summaryRows] = await dbPool.query<Array<{ avg_rating: string | null; review_count: number } & RowDataPacket>>(
+      'SELECT AVG(rating) AS avg_rating, COUNT(*) AS review_count FROM reviews WHERE book_id = ?',
+      [bookId],
+    );
+
+    const summaryRow = summaryRows[0];
+    const reviewCount = Number(summaryRow?.review_count ?? 0);
+    const averageRating = reviewCount > 0 ? Number(summaryRow?.avg_rating ?? 0) : 0;
+
+    const offset = (page - 1) * limit;
+    const [rows] = await dbPool.query<ReviewRow[]>(
+      `
+      SELECT r.review_id, r.book_id, r.user_id, u.username, r.rating, r.comment, r.created_at
+      FROM reviews r
+      JOIN users u ON u.user_id = r.user_id
+      WHERE r.book_id = ?
+      ORDER BY r.created_at DESC
+      LIMIT ? OFFSET ?
+      `,
+      [bookId, limit, offset],
+    );
+
+    return {
+      items: rows.map(mapReviewRow),
+      total: reviewCount,
+      summary: { averageRating, reviewCount },
+    };
+  }
+
+  async addReview(input: {
+    userId: number;
+    bookId: number;
+    rentalId: number;
+    rating: number;
+    comment?: string | null;
+  }): Promise<{ reviewId: number }> {
+    const connection = await dbPool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const [rentalRows] = await connection.query<Array<{
+        rental_id: number;
+        book_id: number;
+        renter_id: number;
+        status: '\u0E01\u0E33\u0E25\u0E31\u0E07\u0E22\u0E37\u0E21' | '\u0E23\u0E2D\u0E04\u0E37\u0E19' | '\u0E04\u0E37\u0E19\u0E41\u0E25\u0E49\u0E27' | '\u0E40\u0E25\u0E22\u0E01\u0E33\u0E2B\u0E19\u0E14';
+      } & RowDataPacket>>(
+        `
+        SELECT rental_id, book_id, COALESCE(renter_id, borrower_id) AS renter_id, status
+        FROM rentals
+        WHERE rental_id = ?
+        FOR UPDATE
+        `,
+        [input.rentalId],
+      );
+
+      if (rentalRows.length === 0) {
+        throw new AppError('Rental not found', 404);
+      }
+
+      const rental = rentalRows[0];
+      if (rental.renter_id !== input.userId) {
+        throw new AppError('Unauthorized', 403);
+      }
+      if (rental.book_id !== input.bookId) {
+        throw new AppError('Invalid rental for this book', 400);
+      }
+      if (rental.status !== '\u0E04\u0E37\u0E19\u0E41\u0E25\u0E49\u0E27') {
+        throw new AppError('เธเนเธญเธเธเธทเธเธซเธเธฑเธเธชเธทเธญกນก่อนจึงรีวิวได้', 400);
+      }
+
+      const [existing] = await connection.query<RowDataPacket[]>(
+        'SELECT review_id FROM reviews WHERE rental_id = ? LIMIT 1',
+        [input.rentalId],
+      );
+      if (existing.length > 0) {
+        throw new AppError('เธเธธเธ“ได้รีวิวรายการนี้แล้ว', 409);
+      }
+
+      const [result] = await connection.query<ResultSetHeader>(
+        'INSERT INTO reviews (book_id, rental_id, user_id, rating, comment) VALUES (?, ?, ?, ?, ?)',
+        [input.bookId, input.rentalId, input.userId, input.rating, input.comment ?? null],
+      );
+
+      await connection.commit();
+
+      return { reviewId: result.insertId };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 
   async payFine(input: {

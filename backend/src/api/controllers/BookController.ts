@@ -21,6 +21,7 @@ const parseNumber = (value: unknown): number | undefined => {
 };
 
 const isRentalPlan = (value: unknown): value is RentalPlan => value === '15days' || value === '30days';
+const isInteger = (value: unknown): value is number => Number.isInteger(value);
 
 const saveImageFromDataUrl = async (imageBase64: string): Promise<string> => {
   const matched = imageBase64.match(/^data:(image\/(png|jpeg|jpg|webp));base64,(.+)$/);
@@ -189,6 +190,24 @@ export class BookController {
     );
   };
 
+  listReviews = async (req: Request, res: Response): Promise<void> => {
+    const bookId = Number(req.params.bookId);
+    if (!Number.isInteger(bookId)) {
+      throw new AppError('Invalid bookId', 400);
+    }
+
+    const page = Math.max(1, Number(req.query.page ?? 1));
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit ?? 10)));
+
+    const result = await this.bookService.listReviewsByBook(bookId, page, limit);
+    sendSuccess(
+      res,
+      { reviews: result.items, summary: result.summary },
+      200,
+      { page, limit, total: result.total },
+    );
+  };
+
   detail = async (req: Request, res: Response): Promise<void> => {
     const bookId = Number(req.params.bookId);
     if (!Number.isInteger(bookId)) {
@@ -233,6 +252,41 @@ export class BookController {
       userId: req.auth.userId,
       bookId,
       plan,
+    });
+
+    sendSuccess(res, result, 201);
+  };
+
+  createReview = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const bookId = Number(req.params.bookId);
+    if (!Number.isInteger(bookId)) {
+      throw new AppError('Invalid bookId', 400);
+    }
+
+    const { rentalId, rating, comment } = req.body as Record<string, unknown>;
+    const parsedRentalId = Number(rentalId);
+    const parsedRating = Number(rating);
+
+    if (!isInteger(parsedRentalId)) {
+      throw new AppError('rentalId must be an integer', 400);
+    }
+    if (!isInteger(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+      throw new AppError('rating must be between 1 and 5', 400);
+    }
+
+    const trimmedComment = typeof comment === 'string' ? comment.trim() : '';
+    const finalComment = trimmedComment.length > 0 ? trimmedComment.slice(0, 500) : null;
+
+    const result = await this.bookService.addReview({
+      userId: req.auth.userId,
+      bookId,
+      rentalId: parsedRentalId,
+      rating: parsedRating,
+      comment: finalComment,
     });
 
     sendSuccess(res, result, 201);

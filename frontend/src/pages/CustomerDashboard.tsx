@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Clock, Package, BookOpen, AlertTriangle, CheckCircle, Calendar, Truck, RotateCcw, RotateCw, Check } from "lucide-react";
+import { Clock, Package, BookOpen, AlertTriangle, CheckCircle, Calendar, Truck, RotateCcw, RotateCw, Check, Star } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
@@ -106,6 +108,8 @@ interface RentalOrder {
   returnRequestedAt: string | null;
   returnDeliverySentAt: string | null;
   returnDeliveryProofPath: string | null;
+  reviewId: number | null;
+  reviewRating: number | null;
 }
 
 const StepProgress = ({ steps, completedCount }: { steps: string[]; completedCount: number }) => {
@@ -149,6 +153,7 @@ const StepProgress = ({ steps, completedCount }: { steps: string[]; completedCou
 };
 
 const CustomerDashboard = () => {
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const token = getAuthToken();
@@ -166,6 +171,44 @@ const CustomerDashboard = () => {
   const [returnTrackingById, setReturnTrackingById] = useState<Record<number, string>>({});
   const [pausedAtById, setPausedAtById] = useState<Record<number, number>>({});
   const activationInFlightRef = useRef<Record<number, boolean>>({});
+  const [reviewingOrder, setReviewingOrder] = useState<RentalOrder | null>(null);
+  const [reviewRating, setReviewRating] = useState<number>(0);
+  const [reviewComment, setReviewComment] = useState<string>("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const openReviewDialog = (order: RentalOrder) => {
+    setReviewingOrder(order);
+    setReviewRating(0);
+    setReviewComment("");
+  };
+
+  const handleSubmitReview = async () => {
+    if (!token || !reviewingOrder) return;
+    if (reviewRating < 1 || reviewRating > 5) {
+      toast({ title: "Please rate 1-5 stars", variant: "destructive" });
+      return;
+    }
+
+    setReviewSubmitting(true);
+    try {
+      await apiPost(`/api/books/${reviewingOrder.bookId}/reviews`, {
+        rentalId: reviewingOrder.rentalId,
+        rating: reviewRating,
+        comment: reviewComment.trim() ? reviewComment.trim() : null,
+      }, token);
+
+      toast({ title: "Thanks for your review!" });
+      setReviewingOrder(null);
+      await queryClient.invalidateQueries({ queryKey: ["my-rentals"] });
+    } catch (error) {
+      toast({
+        title: "Failed to submit review",
+        description: error instanceof HttpError ? error.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
 
   const { data: orders = [] } = useQuery({
     queryKey: ["my-rentals"],
@@ -238,7 +281,7 @@ const CustomerDashboard = () => {
       });
     }, 3000);
 
-    return () => clearInterval(interval);
+  return () => clearInterval(interval);
   }, [activeOrders]);
 
   useEffect(() => {
@@ -515,7 +558,7 @@ const CustomerDashboard = () => {
                     ? Math.max(0, Math.min(100, (1 - daysLeft / totalDays) * 100))
                     : 0;
 
-                return (
+  return (
                   <div key={order.rentalId} className="bg-card rounded-xl border p-4 md:p-6 space-y-4">
                     <div className="flex flex-col md:flex-row gap-4">
                       <img src={resolveImageUrl(order.bookCover)} alt={order.bookTitle} className="w-20 h-28 rounded-lg object-cover shrink-0" />
@@ -706,15 +749,80 @@ const CustomerDashboard = () => {
                   <div className="mt-2 text-sm">
                     <span className="text-success font-medium">คืนมัดจำแล้ว: ฿{order.depositPrice}</span>
                   </div>
-                  <Button asChild variant="outline" size="sm" className="mt-3">
-                    <Link to={`/book/${order.bookId}`}>เช่าอีกครั้ง</Link>
-                  </Button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button asChild variant="outline" size="sm">
+                      <Link to={`/book/${order.bookId}`}>Rent again</Link>
+                    </Button>
+                    {order.reviewId ? (
+                      <Button variant="secondary" size="sm" disabled>
+                        Reviewed
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" onClick={() => openReviewDialog(order)}>
+                        Review
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
           </CardContent>
         </Card>
       </div>
+      <Dialog
+        open={Boolean(reviewingOrder)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReviewingOrder(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Leave a review</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Book: {reviewingOrder?.bookTitle}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setReviewRating(star)}
+                    className="rounded p-1"
+                    aria-label={`Rate ${star} stars`}
+                  >
+                    <Star
+                      className={star <= reviewRating ? "h-5 w-5 text-accent fill-current" : "h-5 w-5 text-muted-foreground"}
+                    />
+                  </button>
+                ))}
+              </div>
+              <span className="text-sm text-muted-foreground">{reviewRating > 0 ? `${reviewRating} stars` : "Choose rating"}</span>
+            </div>
+            <div>
+              <Textarea
+                rows={4}
+                placeholder="Leave a short review (optional)"
+                value={reviewComment}
+                onChange={(event) => setReviewComment(event.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setReviewingOrder(null)} disabled={reviewSubmitting}>
+                Cancel
+              </Button>
+              <Button onClick={() => { void handleSubmitReview(); }} disabled={reviewSubmitting}>
+                {reviewSubmitting ? "Sending..." : "Submit review"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Footer />
     </div>
   );

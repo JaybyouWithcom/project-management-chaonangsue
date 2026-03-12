@@ -61,7 +61,12 @@ const Navbar = () => {
 
   const navLinksToHideWhenLoggedOut = new Set(["/dashboard", "/store", "/settings", "/admin/dashboard"]);
   const visibleNavLinks = loggedIn
-    ? navLinks.filter((link) => (link.to === "/admin/dashboard" ? me?.role === "Admin" : true))
+    ? navLinks.filter((link) => {
+        if (link.to === "/admin/dashboard") return me?.role === "Admin";
+        if (link.to === "/dashboard") return me?.role !== "Admin";
+        if (link.to === "/store") return me?.role !== "Admin";
+        return true;
+      })
     : navLinks.filter((link) => !navLinksToHideWhenLoggedOut.has(link.to));
 
   return (

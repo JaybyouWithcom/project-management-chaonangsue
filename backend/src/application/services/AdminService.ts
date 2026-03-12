@@ -46,6 +46,26 @@ interface BookCountRow extends RowDataPacket {
   total_books: number;
 }
 
+interface RentalStatsRow extends RowDataPacket {
+  active_rentals: number;
+  completed_rentals: number;
+  overdue_rentals: number;
+}
+
+interface ShopRow extends RowDataPacket {
+  shop_id: number;
+  user_id: number;
+  shop_name: string;
+  owner_name: string;
+  book_count: number;
+  created_at: Date;
+}
+
+interface WalletStatsRow extends RowDataPacket {
+  total_user_balance: string;
+  average_user_balance: string;
+}
+
 export interface AdminUserItem {
   userId: number;
   firstname: string;
@@ -71,19 +91,34 @@ export interface AdminBookItem {
   createdAt: string;
 }
 
+export interface AdminShopItem {
+  shopId: number;
+  userId: number;
+  shopName: string;
+  ownerName: string;
+  bookCount: number;
+  createdAt: string;
+}
+
 export interface AdminDashboardSummary {
   totalUsers: number;
   activeUsers: number;
   suspendedUsers: number;
   bannedUsers: number;
   totalBooks: number;
+  activeRentals: number;
+  completedRentals: number;
+  overdueRentals: number;
   totalCommissionRevenue: number;
+  totalUserBalance: number;
+  averageUserBalance: number;
 }
 
 export interface AdminDashboardData {
   summary: AdminDashboardSummary;
   users: AdminUserItem[];
   books: AdminBookItem[];
+  shops: AdminShopItem[];
 }
 
 const mapAdminUser = (row: AdminUserRow): AdminUserItem => ({
@@ -108,6 +143,15 @@ const mapAdminBook = (row: AdminBookRow): AdminBookItem => ({
   ownerName: row.owner_name,
   shopId: row.shop_id,
   shopName: row.shop_name,
+  createdAt: row.created_at.toISOString(),
+});
+
+const mapAdminShop = (row: ShopRow): AdminShopItem => ({
+  shopId: row.shop_id,
+  userId: row.user_id,
+  shopName: row.shop_name,
+  ownerName: row.owner_name,
+  bookCount: row.book_count,
   createdAt: row.created_at.toISOString(),
 });
 
@@ -156,6 +200,26 @@ export class AdminService {
       `,
     );
 
+    const [rentalStatsRows] = await dbPool.query<RentalStatsRow[]>(
+      `
+      SELECT
+        SUM(CASE WHEN status = 'กำลังยืม' THEN 1 ELSE 0 END) AS active_rentals,
+        SUM(CASE WHEN status = 'คืนแล้ว' THEN 1 ELSE 0 END) AS completed_rentals,
+        SUM(CASE WHEN status = 'เลยกำหนด' THEN 1 ELSE 0 END) AS overdue_rentals
+      FROM rentals
+      `,
+    );
+
+    const [walletStatsRows] = await dbPool.query<WalletStatsRow[]>(
+      `
+      SELECT
+        COALESCE(SUM(balance), 0) AS total_user_balance,
+        COALESCE(AVG(balance), 0) AS average_user_balance
+      FROM users
+      WHERE deleted_at IS NULL AND role != 'Banned'
+      `,
+    );
+
     const [users] = await dbPool.query<AdminUserRow[]>(
       `
       SELECT user_id, firstname, lastname, username, email, phone_number, role, balance, suspended_until, deleted_at
@@ -186,9 +250,30 @@ export class AdminService {
       `,
     );
 
+    const [shops] = await dbPool.query<ShopRow[]>(
+      `
+      SELECT
+        s.shop_id,
+        s.user_id,
+        s.shop_name,
+        u.username AS owner_name,
+        COUNT(b.book_id) AS book_count,
+        s.created_at
+      FROM shops s
+      JOIN users u ON u.user_id = s.user_id
+      LEFT JOIN books b ON b.shop_id = s.shop_id AND b.deleted_at IS NULL
+      WHERE s.deleted_at IS NULL
+      GROUP BY s.shop_id, s.user_id, s.shop_name, u.username, s.created_at
+      ORDER BY s.created_at DESC
+      LIMIT 100
+      `,
+    );
+
     const summaryRow = summaryRows[0];
     const commissionRow = commissionRows[0];
     const bookCountRow = bookCountRows[0];
+    const rentalStatsRow = rentalStatsRows[0];
+    const walletStatsRow = walletStatsRows[0];
 
     return {
       summary: {
@@ -197,10 +282,16 @@ export class AdminService {
         suspendedUsers: Number(summaryRow.suspended_users),
         bannedUsers: Number(summaryRow.banned_users),
         totalBooks: Number(bookCountRow.total_books),
+        activeRentals: Number(rentalStatsRow.active_rentals) || 0,
+        completedRentals: Number(rentalStatsRow.completed_rentals) || 0,
+        overdueRentals: Number(rentalStatsRow.overdue_rentals) || 0,
         totalCommissionRevenue: Number(commissionRow.total_commission_revenue ?? 0),
+        totalUserBalance: Number(walletStatsRow.total_user_balance),
+        averageUserBalance: Number(walletStatsRow.average_user_balance),
       },
       users: users.map(mapAdminUser),
       books: books.map(mapAdminBook),
+      shops: shops.map(mapAdminShop),
     };
   }
 

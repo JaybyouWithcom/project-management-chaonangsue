@@ -27,6 +27,7 @@ interface RegisterResponse {
 }
 
 const VERIFY_STATE_STORAGE_KEY = 'verify-account-state';
+const TERMS_ACCEPTED_STORAGE_KEY = 'verify-account-terms-accepted';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const thaiPhoneRegex = /^0\d{9}$/;
@@ -102,7 +103,8 @@ const AuthPage = () => {
         phoneNumber: result.data.phoneNumber,
       };
       sessionStorage.setItem(VERIFY_STATE_STORAGE_KEY, JSON.stringify(verifyState));
-      navigate('/auth/verify', { state: verifyState });
+      sessionStorage.removeItem(TERMS_ACCEPTED_STORAGE_KEY);
+      navigate('/auth/terms', { state: verifyState });
     } catch (error) {
       toast({
         title: 'สมัครสมาชิกไม่สำเร็จ',

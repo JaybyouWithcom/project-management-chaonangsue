@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import Navbar from "@/components/Navbar";
@@ -29,6 +29,7 @@ interface VerifyResponse {
 }
 
 const VERIFY_STATE_STORAGE_KEY = "verify-account-state";
+const TERMS_ACCEPTED_STORAGE_KEY = "verify-account-terms-accepted";
 
 const readStoredVerifyState = (): VerifyState => {
   try {
@@ -53,12 +54,27 @@ const VerifyAccountPage = () => {
   const routeState = (location.state as VerifyState | null) ?? {};
   const storedState = readStoredVerifyState();
   const state = routeState.pendingSignupId ? routeState : storedState;
+  const termsAccepted = sessionStorage.getItem(TERMS_ACCEPTED_STORAGE_KEY) === "true";
   const [method, setMethod] = useState<VerificationMethod>("email");
   const [otp, setOtp] = useState("");
   const [requesting, setRequesting] = useState(false);
   const [verifying, setVerifying] = useState(false);
 
   const hasPhone = useMemo(() => Boolean(state.phoneNumber), [state.phoneNumber]);
+  const verifyStateForNav = useMemo(
+    () => ({
+      pendingSignupId: state.pendingSignupId,
+      email: state.email,
+      phoneNumber: state.phoneNumber,
+    }),
+    [state.email, state.pendingSignupId, state.phoneNumber],
+  );
+
+  useEffect(() => {
+    if (state.pendingSignupId && !termsAccepted) {
+      navigate("/auth/terms", { state: verifyStateForNav });
+    }
+  }, [navigate, state.pendingSignupId, termsAccepted, verifyStateForNav]);
 
   const handleRequestOtp = async () => {
     if (!state.pendingSignupId) {
@@ -113,6 +129,7 @@ const VerifyAccountPage = () => {
       });
       setAuthToken(result.data.token);
       sessionStorage.removeItem(VERIFY_STATE_STORAGE_KEY);
+      sessionStorage.removeItem(TERMS_ACCEPTED_STORAGE_KEY);
       toast({ title: "สมัครสมาชิกสำเร็จ" });
       navigate("/browse");
     } catch (error) {

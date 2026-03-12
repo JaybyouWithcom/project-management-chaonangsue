@@ -518,6 +518,16 @@ export class AuthService {
     }
 
     const normalizedAmount = Math.round(amount * 100) / 100;
+    const maxBalance = 999999;
+    const currentUser = await this.userRepository.findById(input.userId);
+    if (!currentUser) {
+      throw new AppError('ไม่พบบัญชีผู้ใช้', 404);
+    }
+    const currentBalance = Number(currentUser.balance);
+    if (currentBalance + normalizedAmount > maxBalance) {
+      throw new AppError('ยอดเงินคงเหลือสูงสุดไม่เกิน 999999', 400);
+    }
+
     let updatedUser = await this.userRepository.incrementBalanceById(input.userId, normalizedAmount);
     if (Number(updatedUser.balance) >= 0 && updatedUser.suspendedUntil && updatedUser.suspendedUntil.getTime() > Date.now()) {
       await dbPool.query('UPDATE users SET suspended_until = NULL WHERE user_id = ?', [input.userId]);

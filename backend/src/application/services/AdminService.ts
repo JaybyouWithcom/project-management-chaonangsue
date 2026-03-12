@@ -278,7 +278,12 @@ export class AdminService {
       SELECT
         SUM(CASE WHEN status = 'กำลังยืม' THEN 1 ELSE 0 END) AS active_rentals,
         SUM(CASE WHEN status = 'คืนแล้ว' THEN 1 ELSE 0 END) AS completed_rentals,
-        SUM(CASE WHEN status = 'เลยกำหนด' THEN 1 ELSE 0 END) AS overdue_rentals
+        SUM(
+          CASE
+            WHEN status != 'คืนแล้ว' AND due_date IS NOT NULL AND due_date < NOW() THEN 1
+            ELSE 0
+          END
+        ) AS overdue_rentals
       FROM rentals
       `,
     );

@@ -252,6 +252,10 @@ const CustomerDashboard = () => {
     () => orders.filter((o) => o.status === "คืนแล้ว"),
     [orders],
   );
+  const returningOrders = useMemo(
+    () => activeOrders.filter((order) => returnStepById[order.rentalId] !== undefined),
+    [activeOrders, returnStepById]
+  );
 
   useEffect(() => {
     setReceiveTrackingById((prev) => {
@@ -827,10 +831,10 @@ const CustomerDashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {activeOrders.length === 0 ? (
+            {returningOrders.length === 0 ? (
               <p className="text-muted-foreground">ยังไม่มีรายการส่งคืน</p>
             ) : (
-              activeOrders
+              returningOrders
                 .filter((order) => returnStepById[order.rentalId] !== undefined)
                 .map((order) => (
                   <div key={`return-${order.rentalId}`} className="rounded-xl border p-4 space-y-3">

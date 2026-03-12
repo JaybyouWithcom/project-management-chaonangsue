@@ -221,7 +221,7 @@ const BookDetail = () => {
       navigate("/browse");
     } catch (error) {
       toast({
-        title: "เช่าไม่สำเร็จ",
+        title: "เช่าหนังสือไม่สำเร็จ",
         description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
         variant: "destructive",
       });
@@ -453,7 +453,7 @@ const BookDetail = () => {
                 onClick={() => { void handleBooking(); }}
                 disabled={!book.status || book.status !== 'Available' || submitting || isOwnBook || !selectedPlan || !selectedAddressId || !token}
               >
-                {submitting ? "กำลังทำรายการ..." : "จองและชำระเงิน"}
+                {submitting ? "กำลังทำรายการ..." : "เช่าและชำระเงิน"}
               </Button>
               {isOwnBook && (
                 <p className="text-sm text-center text-foreground">

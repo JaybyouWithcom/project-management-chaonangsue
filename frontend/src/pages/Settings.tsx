@@ -347,6 +347,11 @@ const Settings = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {user.role === "Admin" && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
+                      ผู้ดูแลร้านไม่สามารถแก้ไขข้อมูลบัญชีได้
+                    </div>
+                  )}
                   {/* Form แก้ไขข้อมูล */}
                   <form className="space-y-4 pb-6" onSubmit={(event) => { void handleSubmit(event); }} noValidate>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -358,6 +363,8 @@ const Settings = () => {
                           id="firstname"
                           value={form.firstname}
                           onChange={(event) => setForm((prev) => ({ ...prev, firstname: event.target.value }))}
+                          disabled={user.role === "Admin"}
+                          className={user.role === "Admin" ? "opacity-50 cursor-not-allowed bg-muted" : ""}
                           required
                         />
                       </div>
@@ -369,6 +376,8 @@ const Settings = () => {
                           id="lastname"
                           value={form.lastname}
                           onChange={(event) => setForm((prev) => ({ ...prev, lastname: event.target.value }))}
+                          disabled={user.role === "Admin"}
+                          className={user.role === "Admin" ? "opacity-50 cursor-not-allowed bg-muted" : ""}
                           required
                         />
                       </div>
@@ -380,6 +389,8 @@ const Settings = () => {
                           id="username"
                           value={form.username}
                           onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
+                          disabled={user.role === "Admin"}
+                          className={user.role === "Admin" ? "opacity-50 cursor-not-allowed bg-muted" : ""}
                           required
                         />
                       </div>
@@ -392,6 +403,8 @@ const Settings = () => {
                           type="email"
                           value={form.email}
                           onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+                          disabled={user.role === "Admin"}
+                          className={user.role === "Admin" ? "opacity-50 cursor-not-allowed bg-muted" : ""}
                           required
                         />
                       </div>
@@ -404,12 +417,14 @@ const Settings = () => {
                           type="tel"
                           value={form.phoneNumber}
                           onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))}
+                          disabled={user.role === "Admin"}
+                          className={user.role === "Admin" ? "opacity-50 cursor-not-allowed bg-muted" : ""}
                           placeholder="ไม่บังคับ"
                         />
                       </div>
                     </div>
                     <div className="flex justify-end pt-2">
-                      <Button type="submit" disabled={saving}>
+                      <Button type="submit" disabled={saving || user.role === "Admin"}>
                         {saving ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
                       </Button>
                     </div>
@@ -446,6 +461,7 @@ const Settings = () => {
                     </div>
                   </form>
 
+                  {user.role !== "Admin" && (
                   <div className="border-t pt-6 space-y-5">
                     <CardHeader className="px-0">
                       <div className="flex items-center justify-between">
@@ -584,7 +600,9 @@ const Settings = () => {
                       </div>
                     </form>
                   </div>
+                  )}
 
+                  {user.role !== "Admin" && (
                   <form className="space-y-4 border-t pt-6" onSubmit={(event) => { void handleChangePassword(event); }} noValidate>
                     <CardHeader className="px-0">
                       <CardTitle className="flex items-center gap-2">
@@ -627,6 +645,7 @@ const Settings = () => {
                       </Button>
                     </div>
                   </form>
+                  )}
                 </CardContent>
               </Card>
             </>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Clock, Package, BookOpen, AlertTriangle, CheckCircle, Calendar, Truck, RotateCcw, RotateCw, Check } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -152,6 +152,28 @@ const CustomerDashboard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const token = getAuthToken();
+  const navigate = useNavigate();
+
+  interface AuthMe {
+    userId: number;
+    role: "Customer" | "Admin" | "Banned";
+  }
+
+  const { data: me } = useQuery({
+    queryKey: ["auth-me", token],
+    enabled: Boolean(token),
+    retry: false,
+    queryFn: async () => {
+      const response = await apiGet<{ user: AuthMe }>("/api/auth/me", token ?? undefined);
+      return response.data.user;
+    },
+  });
+
+  useEffect(() => {
+    if (me?.role === "Admin") {
+      navigate("/admin/dashboard", { replace: true });
+    }
+  }, [me, navigate]);
 
   type ReceiveTrackingState = Record<number, { step: number; activationSynced: boolean; forceResimulate?: boolean }>;
 

@@ -461,6 +461,25 @@ const CustomerDashboard = () => {
     }
   };
 
+  const handleSimulateAutoComplete = async (rentalId: number) => {
+    if (!token) {
+      toast({ title: "กรุณาเข้าสู่ระบบก่อน", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await apiPost(`/api/books/rentals/${rentalId}/simulate-auto-complete`, {}, token);
+      toast({ title: "จำลอง auto-complete แล้ว" });
+      await queryClient.invalidateQueries({ queryKey: ["my-rentals"] });
+    } catch (error) {
+      toast({
+        title: "จำลอง auto-complete ไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleRefreshReceiveStep = (rentalId: number) => {
     setReceiveTrackingById((prev) => ({
       ...prev,
@@ -609,7 +628,8 @@ const CustomerDashboard = () => {
                     ? Math.max(0, Math.min(100, (1 - daysLeft / totalDays) * 100))
                     : 0;
 
-                const simulatedOverdueDays = daysLeft !== null && daysLeft < 0 ? Math.min(7, Math.abs(daysLeft)) : 0;
+                const rawOverdueDays = daysLeft !== null && daysLeft < 0 ? Math.abs(daysLeft) : 0;
+                const simulatedOverdueDays = Math.min(7, rawOverdueDays);
                 const overdueDays = simulatedOverdueDays > 0
                   ? simulatedOverdueDays
                   : (order.status === "เลยกำหนด" ? Math.min(7, Math.max(order.pastDueDays, 1)) : 0);
@@ -770,6 +790,15 @@ const CustomerDashboard = () => {
                       >
                         +1 วัน
                       </Button>
+                      {rawOverdueDays > 7 ? (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => { void handleSimulateAutoComplete(order.rentalId); }}
+                        >
+                          จำลอง auto-complete
+                        </Button>
+                      ) : null}
                       {simulatedOffsetDays > 0 ? (
                         <Button
                           variant="ghost"

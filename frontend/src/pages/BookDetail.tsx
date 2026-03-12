@@ -260,7 +260,7 @@ const BookDetail = () => {
         reason: reportReason,
         details: reportDetails.trim() ? reportDetails.trim() : null,
       }, token);
-      toast({ title: "ส่งรายงานเรียบร้อยแล้ว" });
+      toast({ title: "ส่งรายงานแล้ว" });
       setIsReportOpen(false);
       resetReportForm();
     } catch (error) {

@@ -470,7 +470,7 @@ const AdminDashboard = () => {
                                 <Badge
                                   variant={report.status === "Open" ? "destructive" : report.status === "Resolved" ? "secondary" : "outline"}
                                 >
-                                  {report.status === "Open" ? "Open" : report.status === "Resolved" ? "Resolved" : "Dismissed"}
+                                  {report.status === "Open" ? "ยังไม่จัดการ" : report.status === "Resolved" ? "แก้ไขแล้ว" : "ปฏิเสธ"}
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-sm text-muted-foreground">
@@ -480,15 +480,15 @@ const AdminDashboard = () => {
                                 {report.status === "Open" ? (
                                   <div className="flex flex-wrap gap-2">
                                     <Button size="sm" onClick={() => void handleReportAction(report.reportId, "RESOLVE")}>
-                                      Resolve
+                                      แก้ไขแล้ว
                                     </Button>
                                     <Button size="sm" variant="outline" onClick={() => void handleReportAction(report.reportId, "DISMISS")}>
-                                      Dismiss
+                                      ปฏิเสธ
                                     </Button>
                                   </div>
                                 ) : (
                                   <Button size="sm" variant="outline" onClick={() => void handleReportAction(report.reportId, "REOPEN")}>
-                                    Reopen
+                                    เปิดใหม่
                                   </Button>
                                 )}
                               </TableCell>

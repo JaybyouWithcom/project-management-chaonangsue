@@ -559,26 +559,28 @@ export class BookService {
         rental_price: string;
         net_rental_amount: string;
         due_date: Date | null;
+        past_due_days: number;
       } & RowDataPacket>>(
         `
         SELECT r.rental_id, r.book_id, b.title AS book_title, r.owner_id,
                COALESCE(r.renter_id, r.borrower_id) AS renter_id, r.deposit_price,
-               r.rental_price, r.net_rental_amount, r.due_date
+               r.rental_price, r.net_rental_amount, r.due_date, r.past_due_days
         FROM rentals r
         JOIN books b ON b.book_id = r.book_id
         WHERE r.due_date IS NOT NULL
           AND r.status != '\u0e04\u0e37\u0e19\u0e41\u0e25\u0e49\u0e27'
-          AND DATEDIFF(NOW(), r.due_date) > ?${whereSql}
+          AND (DATEDIFF(NOW(), r.due_date) > ? OR r.past_due_days > ?)${whereSql}
         FOR UPDATE
         `,
-        params,
+        [params[0], params[0], ...params.slice(1)],
       );
 
       for (const rental of rentalRows) {
         if (!rental.due_date) {
           continue;
         }
-        const overdueDaysRaw = Math.max(0, Math.ceil((Date.now() - rental.due_date.getTime()) / 86400000));
+        const overdueDaysByDate = Math.max(0, Math.ceil((Date.now() - rental.due_date.getTime()) / 86400000));
+        const overdueDaysRaw = Math.max(overdueDaysByDate, rental.past_due_days ?? 0);
         if (overdueDaysRaw <= overdueFineMaxDays) {
           continue;
         }
@@ -612,7 +614,7 @@ export class BookService {
             INSERT INTO wallet_transactions (user_id, transaction_type, amount, description, reference_id)
             VALUES (?, 'FINE', ?, ?, ?)
             `,
-            [rental.renter_id, -walletCharged, `Auto overdue fine: ${rental.book_title}`, rental.rental_id],
+            [rental.renter_id, -walletCharged, `รับค่าปรับเลยกำหนด: ${rental.book_title}`, rental.rental_id],
           );
         }
 
@@ -624,7 +626,7 @@ export class BookService {
             INSERT INTO wallet_transactions (user_id, transaction_type, amount, description, reference_id)
             VALUES (?, 'PAYOUT', ?, ?, ?)
             `,
-            [rental.owner_id, ownerPayout, `Auto close payout: ${rental.book_title}`, rental.rental_id],
+            [rental.owner_id, ownerPayout, `รับเงินชดเชยผู้เช่าไม่คืนหนังสือ: ${rental.book_title}`, rental.rental_id],
           );
         }
 
@@ -1062,6 +1064,74 @@ export class BookService {
     } finally {
       connection.release();
     }
+  }
+
+  async simulateAutoComplete(input: { userId: number; rentalId: number }): Promise<{
+    rentalId: number;
+    status: 'คืนแล้ว' | 'กำลังยืม' | 'รอคืน' | 'เลยกำหนด';
+    pastDueDays: number;
+  }> {
+    const connection = await dbPool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const [rentalRows] = await connection.query<Array<{
+        rental_id: number;
+        renter_id: number;
+        status: 'กำลังยืม' | 'รอคืน' | 'คืนแล้ว' | 'เลยกำหนด';
+        due_date: Date | null;
+        past_due_days: number;
+      } & RowDataPacket>>(
+        `
+        SELECT rental_id, COALESCE(renter_id, borrower_id) AS renter_id, status, due_date, past_due_days
+        FROM rentals
+        WHERE rental_id = ?
+        FOR UPDATE
+        `,
+        [input.rentalId],
+      );
+
+      if (rentalRows.length === 0) {
+        throw new AppError('Rental not found', 404);
+      }
+
+      const rental = rentalRows[0];
+      if (rental.renter_id !== input.userId) {
+        throw new AppError('Unauthorized', 403);
+      }
+      if (!rental.due_date) {
+        throw new AppError('รายการนี้ยังไม่เริ่มเช่า', 400);
+      }
+      if (rental.status === 'คืนแล้ว') {
+        throw new AppError('รายการนี้ถูกคืนแล้ว', 400);
+      }
+
+      const simulatedDays = overdueFineMaxDays + 1;
+      await connection.query(
+        'UPDATE rentals SET past_due_days = GREATEST(COALESCE(past_due_days, 0), ?) WHERE rental_id = ?',
+        [simulatedDays, input.rentalId],
+      );
+
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+    await this.autoTerminateOverdueRentals({ renterId: input.userId });
+
+    const [updatedRows] = await dbPool.query<Array<{ status: 'กำลังยืม' | 'รอคืน' | 'คืนแล้ว' | 'เลยกำหนด'; past_due_days: number } & RowDataPacket>>(
+      'SELECT status, past_due_days FROM rentals WHERE rental_id = ?',
+      [input.rentalId],
+    );
+    const updated = updatedRows[0];
+    return {
+      rentalId: input.rentalId,
+      status: updated?.status ?? 'กำลังยืม',
+      pastDueDays: updated?.past_due_days ?? 0,
+    };
   }
 
   async confirmReturnByShop(input: {

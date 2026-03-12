@@ -430,6 +430,23 @@ export class BookController {
     sendSuccess(res, result);
   };
 
+  simulateAutoComplete = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const rentalId = Number(req.params.rentalId);
+    if (!Number.isInteger(rentalId)) {
+      throw new AppError('Invalid rentalId', 400);
+    }
+
+    const result = await this.bookService.simulateAutoComplete({
+      userId: req.auth.userId,
+      rentalId,
+    });
+    sendSuccess(res, result);
+  };
+
   activateRental = async (req: Request, res: Response): Promise<void> => {
     if (!req.auth?.userId) {
       throw new AppError('Unauthorized', 401);

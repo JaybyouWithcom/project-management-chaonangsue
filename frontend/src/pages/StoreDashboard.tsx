@@ -123,6 +123,8 @@ const StoreDashboard = () => {
   const [deleteShopConfirm, setDeleteShopConfirm] = useState("");
   const [returnConfirmRental, setReturnConfirmRental] = useState<ApiRental | null>(null);
   const [conditionFineRate, setConditionFineRate] = useState(0);
+  const [reportedRentalIds, setReportedRentalIds] = useState<Record<number, boolean>>({});
+  const [reportingRentalIds, setReportingRentalIds] = useState<Record<number, boolean>>({});
   const [form, setForm] = useState({
     title: "",
     author: "",
@@ -498,8 +500,12 @@ const StoreDashboard = () => {
       toast({ title: "กรุณาเข้าสู่ระบบ", variant: "destructive" });
       return;
     }
+    if (reportedRentalIds[rental.rentalId] || reportingRentalIds[rental.rentalId]) {
+      return;
+    }
 
     try {
+      setReportingRentalIds((prev) => ({ ...prev, [rental.rentalId]: true }));
       await apiPost(
         `/api/books/${rental.bookId}/report`,
         {
@@ -508,13 +514,16 @@ const StoreDashboard = () => {
         },
         token,
       );
-      toast({ title: "ส่งรายงานแล้ว" });
+      setReportedRentalIds((prev) => ({ ...prev, [rental.rentalId]: true }));
+      toast({ title: "ส่งรายงานเรียบร้อยแล้ว" });
     } catch (error) {
       toast({
         title: "เกิดข้อผิดพลาดในการรายงาน",
         description: error instanceof HttpError ? error.message : "Unexpected error",
         variant: "destructive",
       });
+    } finally {
+      setReportingRentalIds((prev) => ({ ...prev, [rental.rentalId]: false }));
     }
   };
 
@@ -760,10 +769,11 @@ const StoreDashboard = () => {
                           rental.status === "คืนแล้ว" && rental.pastDueDays >= 7 && !rental.returnRequestedAt ? (
                             <Button
                               size="sm"
-                              variant="outline"
+                              variant="destructive"
                               onClick={() => handleReportRental(rental)}
+                              disabled={Boolean(reportedRentalIds[rental.rentalId] || reportingRentalIds[rental.rentalId])}
                             >
-                              Report
+                              {reportedRentalIds[rental.rentalId] ? "แจ้งแล้ว" : reportingRentalIds[rental.rentalId] ? "กำลังแจ้ง..." : "แจ้งแบน"}
                             </Button>
                           ) : (
                             <span className="text-xs text-muted-foreground">-</span>

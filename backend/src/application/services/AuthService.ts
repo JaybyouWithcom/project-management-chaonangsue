@@ -137,6 +137,8 @@ const hashOtp = (otp: string): string =>
 
 const generateOtp = (): string => String(Math.floor(100000 + Math.random() * 900000));
 
+const getMockPhoneOtp = (): string => env.auth.otpSecret;
+
 const readSmtpCode = (response: string): number => Number(response.slice(0, 3));
 
 const normalizePhoneNumber = (phoneNumber?: string | null): string | null => {
@@ -214,7 +216,7 @@ export class AuthService {
       if (!pending.phone_number) {
         throw new AppError('บัญชีนี้ยังไม่มีเบอร์โทรศัพท์', 400);
       }
-      otp = '000000';
+      otp = getMockPhoneOtp();
       target = pending.phone_number;
     }
 
@@ -247,30 +249,26 @@ export class AuthService {
       throw new AppError('คำขอสมัครหมดอายุหรือถูกใช้งานแล้ว กรุณาสมัครใหม่', 400);
     }
 
-    const isMockPhoneOtp = input.method === 'phone' && input.otp === '000000';
-    let row: PendingOtpRow | null = null;
-    if (!isMockPhoneOtp) {
-      const [rows] = await dbPool.query<PendingOtpRow[]>(
-        `
-        SELECT pending_signup_otp_id, otp_hash, expires_at
-        FROM pending_signup_otps
-        WHERE pending_signup_id = ? AND method = ? AND used_at IS NULL
-        ORDER BY pending_signup_otp_id DESC
-        LIMIT 1
-        `,
-        [input.pendingSignupId, input.method],
-      );
-      if (rows.length === 0) {
-        throw new AppError('ไม่พบ OTP ที่ใช้งานได้', 400);
-      }
+    const [rows] = await dbPool.query<PendingOtpRow[]>(
+      `
+      SELECT pending_signup_otp_id, otp_hash, expires_at
+      FROM pending_signup_otps
+      WHERE pending_signup_id = ? AND method = ? AND used_at IS NULL
+      ORDER BY pending_signup_otp_id DESC
+      LIMIT 1
+      `,
+      [input.pendingSignupId, input.method],
+    );
+    if (rows.length === 0) {
+      throw new AppError('ไม่พบ OTP ที่ใช้งานได้', 400);
+    }
 
-      row = rows[0];
-      if (row.expires_at.getTime() < Date.now()) {
-        throw new AppError('OTP หมดอายุแล้ว', 400);
-      }
-      if (hashOtp(input.otp) !== row.otp_hash) {
-        throw new AppError('OTP ไม่ถูกต้อง', 400);
-      }
+    const row = rows[0];
+    if (row.expires_at.getTime() < Date.now()) {
+      throw new AppError('OTP หมดอายุแล้ว', 400);
+    }
+    if (hashOtp(input.otp) !== row.otp_hash) {
+      throw new AppError('OTP ไม่ถูกต้อง', 400);
     }
 
     await this.assertUniqueness({
@@ -299,9 +297,7 @@ export class AuthService {
       throw error;
     }
 
-    if (row) {
-      await dbPool.query('UPDATE pending_signup_otps SET used_at = NOW() WHERE pending_signup_otp_id = ?', [row.pending_signup_otp_id]);
-    }
+    await dbPool.query('UPDATE pending_signup_otps SET used_at = NOW() WHERE pending_signup_otp_id = ?', [row.pending_signup_otp_id]);
     await dbPool.query('UPDATE pending_signups SET consumed_at = NOW() WHERE pending_signup_id = ?', [input.pendingSignupId]);
 
     return {

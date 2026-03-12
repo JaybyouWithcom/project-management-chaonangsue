@@ -28,11 +28,31 @@ interface VerifyResponse {
   token: string;
 }
 
+const VERIFY_STATE_STORAGE_KEY = "verify-account-state";
+
+const readStoredVerifyState = (): VerifyState => {
+  try {
+    const raw = sessionStorage.getItem(VERIFY_STATE_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as VerifyState;
+    if (!parsed || typeof parsed.pendingSignupId !== "number") {
+      return {};
+    }
+    return parsed;
+  } catch {
+    return {};
+  }
+};
+
 const VerifyAccountPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const location = useLocation();
-  const state = (location.state as VerifyState | null) ?? {};
+  const routeState = (location.state as VerifyState | null) ?? {};
+  const storedState = readStoredVerifyState();
+  const state = routeState.pendingSignupId ? routeState : storedState;
   const [method, setMethod] = useState<VerificationMethod>("email");
   const [otp, setOtp] = useState("");
   const [requesting, setRequesting] = useState(false);
@@ -60,7 +80,7 @@ const VerifyAccountPage = () => {
       });
       toast({
         title: method === "email" ? "ส่ง OTP ทางอีเมลแล้ว" : "ส่ง OTP ทางโทรศัพท์แล้ว (mock)",
-        description: method === "phone" ? "สำหรับ mock ให้ใช้รหัส 000000" : undefined,
+        description: method === "phone" ? "สำหรับ mock ให้ใช้รหัสจาก OTP_SECRET ในไฟล์ .env ของ backend" : undefined,
       });
     } catch (error) {
       toast({
@@ -92,6 +112,7 @@ const VerifyAccountPage = () => {
         otp: otp.trim(),
       });
       setAuthToken(result.data.token);
+      sessionStorage.removeItem(VERIFY_STATE_STORAGE_KEY);
       toast({ title: "สมัครสมาชิกสำเร็จ" });
       navigate("/browse");
     } catch (error) {
@@ -132,7 +153,7 @@ const VerifyAccountPage = () => {
               <p className="text-sm text-muted-foreground">
                 {method === "email"
                   ? `จะส่ง OTP ไปที่ ${state.email ?? "-"}`
-                  : `โหมดทดสอบ: OTP คือ 000000`}
+                  : "โหมดทดสอบ: OTP คือค่าจาก OTP_SECRET ใน backend/.env"}
               </p>
             </div>
 

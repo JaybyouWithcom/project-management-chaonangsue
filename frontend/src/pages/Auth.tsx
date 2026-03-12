@@ -26,6 +26,8 @@ interface RegisterResponse {
   requiresVerification: true;
 }
 
+const VERIFY_STATE_STORAGE_KEY = 'verify-account-state';
+
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const thaiPhoneRegex = /^0\d{9}$/;
 
@@ -94,13 +96,13 @@ const AuthPage = () => {
         email: normalizedEmail,
         phoneNumber: normalizedPhone,
       });
-      navigate('/auth/verify', {
-        state: {
-          pendingSignupId: result.data.pendingSignupId,
-          email: result.data.email,
-          phoneNumber: result.data.phoneNumber,
-        },
-      });
+      const verifyState = {
+        pendingSignupId: result.data.pendingSignupId,
+        email: result.data.email,
+        phoneNumber: result.data.phoneNumber,
+      };
+      sessionStorage.setItem(VERIFY_STATE_STORAGE_KEY, JSON.stringify(verifyState));
+      navigate('/auth/verify', { state: verifyState });
     } catch (error) {
       toast({
         title: 'สมัครสมาชิกไม่สำเร็จ',

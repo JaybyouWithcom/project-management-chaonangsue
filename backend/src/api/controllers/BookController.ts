@@ -387,9 +387,10 @@ export class BookController {
       throw new AppError('Invalid rentalId', 400);
     }
 
-    const { deliveryProofImageBase64, deliverySentAt } = req.body as Record<string, unknown>;
+    const { deliveryProofImageBase64, deliverySentAt, simulatedOverdueDays } = req.body as Record<string, unknown>;
     let parsedDeliverySentAt: Date | null = null;
     let deliveryProofPath: string | null = null;
+    let parsedSimulatedOverdueDays: number | undefined;
 
     const hasProof = isNonEmptyString(deliveryProofImageBase64);
     const hasDeliverySentAt = isNonEmptyString(deliverySentAt);
@@ -409,11 +410,22 @@ export class BookController {
       deliveryProofPath = await saveReturnProofFromDataUrl(deliveryProofImageBase64 as string);
     }
 
+    if (simulatedOverdueDays !== undefined) {
+      if (typeof simulatedOverdueDays !== 'number' || !Number.isInteger(simulatedOverdueDays)) {
+        throw new AppError('Invalid simulatedOverdueDays', 400);
+      }
+      if (simulatedOverdueDays < 0 || simulatedOverdueDays > 7) {
+        throw new AppError('Invalid simulatedOverdueDays', 400);
+      }
+      parsedSimulatedOverdueDays = simulatedOverdueDays;
+    }
+
     const result = await this.bookService.requestReturn({
       userId: req.auth.userId,
       rentalId,
       deliveryProofPath,
       deliverySentAt: parsedDeliverySentAt,
+      simulatedOverdueDays: parsedSimulatedOverdueDays,
     });
     sendSuccess(res, result);
   };
@@ -445,9 +457,16 @@ export class BookController {
       throw new AppError('Invalid rentalId', 400);
     }
 
+    const { conditionFineRate } = req.body as Record<string, unknown>;
+    const parsedConditionFineRate = parseNumber(conditionFineRate);
+    if (parsedConditionFineRate === undefined) {
+      throw new AppError('conditionFineRate must be a number', 400);
+    }
+
     const result = await this.bookService.confirmReturnByShop({
       userId: req.auth.userId,
       rentalId,
+      conditionFineRate: parsedConditionFineRate,
     });
     sendSuccess(res, result);
   };

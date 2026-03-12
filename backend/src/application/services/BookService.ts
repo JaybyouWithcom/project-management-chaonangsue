@@ -54,9 +54,13 @@ const planRateMap: Record<RentalPlan, number> = {
 };
 
 const depositRate = 0.5;
+const overdueFineRate = 0.25;
+const overdueFineMaxDays = 7;
 
 const toMoney = (value: number): number => Math.round(value * 100) / 100;
-
+const clampOverdueDays = (days: number): number => Math.max(0, Math.min(overdueFineMaxDays, days));
+const calcOverdueFine = (rentalPrice: number, days: number): number =>
+  toMoney(rentalPrice * overdueFineRate * clampOverdueDays(days));
 interface BookForRentRow extends RowDataPacket {
   book_id: number;
   owner_id: number;
@@ -68,6 +72,7 @@ interface BookForRentRow extends RowDataPacket {
 interface UserBalanceRow extends RowDataPacket {
   user_id: number;
   balance: string;
+  suspended_until?: Date | null;
 }
 
 interface RentalRow extends RowDataPacket {
@@ -90,6 +95,8 @@ interface RentalRow extends RowDataPacket {
   total_amount: string;
   past_due_days: number;
   fine_paid_at: Date | null;
+  condition_fine_rate: string;
+  condition_fine_amount: string;
   fine_amount_due: string;
   fine_amount_total: string;
   payment_status: 'ชำระแล้ว' | 'รอชำระ' | 'ยกเลิก';
@@ -120,6 +127,8 @@ export interface RentalListItem {
   depositPrice: number;
   totalPrice: number;
   pastDueDays: number;
+  conditionFineRate: number;
+  conditionFineAmount: number;
   fineAmountDue: number;
   fineAmountTotal: number;
   finePaidAt: string | null;
@@ -151,6 +160,8 @@ const mapRentalRow = (row: RentalRow): RentalListItem => ({
     depositPrice: Number(row.deposit_price),
     totalPrice: Number(row.total_amount),
     pastDueDays: Number(row.past_due_days),
+    conditionFineRate: Number(row.condition_fine_rate),
+    conditionFineAmount: Number(row.condition_fine_amount),
     fineAmountDue: Number(row.fine_amount_due),
     fineAmountTotal: Number(row.fine_amount_total),
     finePaidAt: row.fine_paid_at ? row.fine_paid_at.toISOString() : null,
@@ -352,12 +363,15 @@ export class BookService {
       }
 
       const [userRows] = await connection.query<UserBalanceRow[]>(
-        'SELECT user_id, balance FROM users WHERE user_id = ? AND deleted_at IS NULL FOR UPDATE',
+        'SELECT user_id, balance, suspended_until FROM users WHERE user_id = ? AND deleted_at IS NULL FOR UPDATE',
         [input.userId],
       );
 
       if (userRows.length === 0) {
         throw new AppError('User not found', 404);
+      }
+      if (userRows[0].suspended_until && userRows[0].suspended_until.getTime() > Date.now()) {
+        throw new AppError('Account is locked due to negative balance', 403);
       }
 
       const basePrice = Number(book.book_price);
@@ -518,7 +532,120 @@ export class BookService {
     }
   }
 
+  private async autoTerminateOverdueRentals(input: { renterId?: number; shopId?: number }): Promise<void> {
+    const connection = await dbPool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const whereClauses: string[] = [];
+      const params: Array<number> = [overdueFineMaxDays];
+      if (input.renterId) {
+        whereClauses.push('COALESCE(r.renter_id, r.borrower_id) = ?');
+        params.push(input.renterId);
+      }
+      if (input.shopId) {
+        whereClauses.push('r.shop_id = ?');
+        params.push(input.shopId);
+      }
+
+      const whereSql = whereClauses.length > 0 ? ` AND ${whereClauses.join(' AND ')}` : '';
+      const [rentalRows] = await connection.query<Array<{
+        rental_id: number;
+        book_id: number;
+        book_title: string;
+        owner_id: number;
+        renter_id: number;
+        deposit_price: string;
+        rental_price: string;
+        net_rental_amount: string;
+        due_date: Date | null;
+      } & RowDataPacket>>(
+        `
+        SELECT r.rental_id, r.book_id, b.title AS book_title, r.owner_id,
+               COALESCE(r.renter_id, r.borrower_id) AS renter_id, r.deposit_price,
+               r.rental_price, r.net_rental_amount, r.due_date
+        FROM rentals r
+        JOIN books b ON b.book_id = r.book_id
+        WHERE r.due_date IS NOT NULL
+          AND r.status != '\u0e04\u0e37\u0e19\u0e41\u0e25\u0e49\u0e27'
+          AND DATEDIFF(NOW(), r.due_date) > ?${whereSql}
+        FOR UPDATE
+        `,
+        params,
+      );
+
+      for (const rental of rentalRows) {
+        if (!rental.due_date) {
+          continue;
+        }
+        const overdueDaysRaw = Math.max(0, Math.ceil((Date.now() - rental.due_date.getTime()) / 86400000));
+        if (overdueDaysRaw <= overdueFineMaxDays) {
+          continue;
+        }
+
+        const overdueDays = overdueFineMaxDays;
+        const depositPrice = Number(rental.deposit_price);
+        const rentalPrice = Number(rental.rental_price);
+        const conditionFineAmount = toMoney(depositPrice);
+        const overdueFineAmount = calcOverdueFine(rentalPrice, overdueDays);
+        const walletCharged = overdueFineAmount;
+
+        const [renterRows] = await connection.query<UserBalanceRow[]>(
+          'SELECT user_id, balance, suspended_until FROM users WHERE user_id = ? AND deleted_at IS NULL FOR UPDATE',
+          [rental.renter_id],
+        );
+        if (renterRows.length === 0) {
+          throw new AppError('User not found', 404);
+        }
+
+        const currentBalance = Number(renterRows[0].balance);
+        const balanceAfter = toMoney(currentBalance - walletCharged);
+
+        await connection.query(
+          'UPDATE users SET balance = ? WHERE user_id = ?',
+          [balanceAfter, rental.renter_id],
+        );
+
+        if (walletCharged > 0) {
+          await connection.query(
+            `
+            INSERT INTO wallet_transactions (user_id, transaction_type, amount, description, reference_id)
+            VALUES (?, 'FINE', ?, ?, ?)
+            `,
+            [rental.renter_id, -walletCharged, `Auto overdue fine: ${rental.book_title}`, rental.rental_id],
+          );
+        }
+
+        const ownerPayout = toMoney(Number(rental.net_rental_amount) + conditionFineAmount + overdueFineAmount);
+        if (ownerPayout > 0) {
+          await connection.query('UPDATE users SET balance = ROUND(balance + ?, 2) WHERE user_id = ?', [ownerPayout, rental.owner_id]);
+          await connection.query(
+            `
+            INSERT INTO wallet_transactions (user_id, transaction_type, amount, description, reference_id)
+            VALUES (?, 'PAYOUT', ?, ?, ?)
+            `,
+            [rental.owner_id, ownerPayout, `Auto close payout: ${rental.book_title}`, rental.rental_id],
+          );
+        }
+
+        await connection.query(
+          'UPDATE rentals SET status = ?, past_due_days = ?, fine_paid_at = NOW(), condition_fine_rate = ?, condition_fine_amount = ? WHERE rental_id = ?',
+          ['\u0e04\u0e37\u0e19\u0e41\u0e25\u0e49\u0e27', overdueDays, 1, conditionFineAmount, rental.rental_id],
+        );
+        await connection.query('UPDATE books SET status = ? WHERE book_id = ?', ['Available', rental.book_id]);
+      }
+
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
   async listRentalsByUserId(userId: number): Promise<RentalListItem[]> {
+    await this.autoTerminateOverdueRentals({ renterId: userId });
     const [rows] = await dbPool.query<RentalRow[]>(
       `
       SELECT
@@ -541,20 +668,23 @@ export class BookService {
         r.total_amount,
         CASE
           WHEN r.due_date IS NOT NULL
-            AND (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW()))
-            AND r.fine_paid_at IS NULL
-          THEN GREATEST(r.past_due_days, DATEDIFF(NOW(), r.due_date), 1)
+            AND r.status != 'คืนแล้ว'
+            AND r.due_date < NOW()
+          THEN LEAST(GREATEST(r.past_due_days, DATEDIFF(NOW(), r.due_date), 1), 7)
           ELSE r.past_due_days
         END AS past_due_days,
         r.fine_paid_at,
+        r.condition_fine_rate,
+        r.condition_fine_amount,
         CASE
           WHEN r.due_date IS NOT NULL
-            AND (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW()))
+            AND r.status != 'คืนแล้ว'
+            AND r.due_date < NOW()
             AND r.fine_paid_at IS NULL
-          THEN ROUND((GREATEST(r.past_due_days, DATEDIFF(NOW(), r.due_date), 1) * r.rental_price * 0.30), 2)
+          THEN ROUND((LEAST(GREATEST(r.past_due_days, DATEDIFF(NOW(), r.due_date), 1), 7) * r.rental_price * 0.25), 2)
           ELSE 0
         END AS fine_amount_due,
-        ROUND((r.past_due_days * r.rental_price * 0.30), 2) AS fine_amount_total,
+        ROUND((LEAST(r.past_due_days, 7) * r.rental_price * 0.25), 2) + COALESCE(r.condition_fine_amount, 0) AS fine_amount_total,
         r.payment_status,
         r.return_requested_at,
         r.return_delivery_sent_at,
@@ -585,6 +715,7 @@ export class BookService {
       throw new AppError('ไม่พบร้านที่คุณเลือก หรือคุณไม่มีสิทธิ์จัดการร้านนี้', 403);
     }
 
+    await this.autoTerminateOverdueRentals({ shopId });
     const [rows] = await dbPool.query<RentalRow[]>(
       `
       SELECT
@@ -607,20 +738,23 @@ export class BookService {
         r.total_amount,
         CASE
           WHEN r.due_date IS NOT NULL
-            AND (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW()))
-            AND r.fine_paid_at IS NULL
-          THEN GREATEST(r.past_due_days, DATEDIFF(NOW(), r.due_date), 1)
+            AND r.status != 'คืนแล้ว'
+            AND r.due_date < NOW()
+          THEN LEAST(GREATEST(r.past_due_days, DATEDIFF(NOW(), r.due_date), 1), 7)
           ELSE r.past_due_days
         END AS past_due_days,
         r.fine_paid_at,
+        r.condition_fine_rate,
+        r.condition_fine_amount,
         CASE
           WHEN r.due_date IS NOT NULL
-            AND (r.status = 'เลยกำหนด' OR (r.status = 'กำลังยืม' AND r.due_date < NOW()))
+            AND r.status != 'คืนแล้ว'
+            AND r.due_date < NOW()
             AND r.fine_paid_at IS NULL
-          THEN ROUND((GREATEST(r.past_due_days, DATEDIFF(NOW(), r.due_date), 1) * r.rental_price * 0.30), 2)
+          THEN ROUND((LEAST(GREATEST(r.past_due_days, DATEDIFF(NOW(), r.due_date), 1), 7) * r.rental_price * 0.25), 2)
           ELSE 0
         END AS fine_amount_due,
-        ROUND((r.past_due_days * r.rental_price * 0.30), 2) AS fine_amount_total,
+        ROUND((LEAST(r.past_due_days, 7) * r.rental_price * 0.25), 2) + COALESCE(r.condition_fine_amount, 0) AS fine_amount_total,
         r.payment_status,
         r.return_requested_at,
         r.return_delivery_sent_at,
@@ -790,17 +924,20 @@ export class BookService {
         throw new AppError('ชำระค่าปรับแล้ว', 400);
       }
 
-      const overdueDays = Math.max(0, Math.ceil((Date.now() - rental.due_date.getTime()) / 86400000));
-      const isOverdue = rental.status === 'เลยกำหนด' || overdueDays > 0;
+      const overdueDaysRaw = Math.max(0, Math.ceil((Date.now() - rental.due_date.getTime()) / 86400000));
+      const isOverdue = rental.status === 'เลยกำหนด' || overdueDaysRaw > 0;
       if (!isOverdue) {
         throw new AppError('รายการนี้ยังไม่เลยกำหนด', 400);
       }
+      if (overdueDaysRaw > overdueFineMaxDays) {
+        throw new AppError('เกิน 7 วัน ระบบจะปิดรายการอัตโนมัติ', 400);
+      }
 
-      const pastDueDays = Math.max(rental.past_due_days, overdueDays, 1);
-      const fineAmount = toMoney(Number(rental.rental_price) * 0.30 * pastDueDays);
+      const pastDueDays = clampOverdueDays(Math.max(rental.past_due_days, overdueDaysRaw, 1));
+      const fineAmount = calcOverdueFine(Number(rental.rental_price), pastDueDays);
 
       const [userRows] = await connection.query<UserBalanceRow[]>(
-        'SELECT user_id, balance FROM users WHERE user_id = ? AND deleted_at IS NULL FOR UPDATE',
+        'SELECT user_id, balance, suspended_until FROM users WHERE user_id = ? AND deleted_at IS NULL FOR UPDATE',
         [input.userId],
       );
       if (userRows.length === 0) {
@@ -808,15 +945,19 @@ export class BookService {
       }
 
       const currentBalance = Number(userRows[0].balance);
-      if (currentBalance < fineAmount) {
-        throw new AppError('ยอดเงินไม่เพียงพอ', 400);
-      }
       const balanceAfter = toMoney(currentBalance - fineAmount);
 
       await connection.query('UPDATE users SET balance = ? WHERE user_id = ?', [balanceAfter, input.userId]);
       await connection.query(
         'UPDATE rentals SET status = ?, past_due_days = ?, fine_paid_at = NOW() WHERE rental_id = ?',
         ['เลยกำหนด', pastDueDays, input.rentalId],
+      );
+      await connection.query(
+        `
+        INSERT INTO wallet_transactions (user_id, transaction_type, amount, description, reference_id)
+        VALUES (?, 'FINE', ?, ?, ?)
+        `,
+        [input.userId, -fineAmount, `ค่าปรับเลยกำหนด: RENT-${input.rentalId}`, input.rentalId],
       );
 
       await connection.commit();
@@ -840,6 +981,7 @@ export class BookService {
     rentalId: number;
     deliveryProofPath?: string | null;
     deliverySentAt?: Date | null;
+    simulatedOverdueDays?: number;
   }): Promise<{
     rentalId: number;
     status: 'รอคืน';
@@ -888,6 +1030,8 @@ export class BookService {
         throw new AppError('รายการนี้เลยกำหนดแล้ว ยังไม่เปิดรับการคืนผ่านระบบตอนนี้', 400);
       }
 
+      const simulatedOverdueDays = clampOverdueDays(Math.max(0, input.simulatedOverdueDays ?? 0));
+
       const now = new Date();
       await connection.query(
         `
@@ -896,10 +1040,11 @@ export class BookService {
           status = 'รอคืน',
           return_requested_at = ?,
           return_delivery_sent_at = ?,
-          return_delivery_proof_path = ?
+          return_delivery_proof_path = ?,
+          past_due_days = GREATEST(COALESCE(past_due_days, 0), ?)
         WHERE rental_id = ?
         `,
-        [now, input.deliverySentAt ?? null, input.deliveryProofPath ?? null, input.rentalId],
+        [now, input.deliverySentAt ?? null, input.deliveryProofPath ?? null, simulatedOverdueDays, input.rentalId],
       );
 
       await connection.commit();
@@ -922,17 +1067,30 @@ export class BookService {
   async confirmReturnByShop(input: {
     userId: number;
     rentalId: number;
+    conditionFineRate: number;
   }): Promise<{
     rentalId: number;
     bookId: number;
-    status: 'คืนแล้ว';
+    status: '\u0e04\u0e37\u0e19\u0e41\u0e25\u0e49\u0e27';
     refundedAmount: number;
     renterId: number;
     balanceAfter: number;
+    conditionFineRate: number;
+    conditionFineAmount: number;
+    overdueFineAmount: number;
+    totalFine: number;
+    depositUsed: number;
+    walletCharged: number;
+    ownerPayout: number;
   }> {
     const connection = await dbPool.getConnection();
     try {
       await connection.beginTransaction();
+
+      const allowedRates = new Set([0, 0.25, 0.5, 0.75, 1]);
+      if (!allowedRates.has(input.conditionFineRate)) {
+        throw new AppError('Invalid conditionFineRate', 400);
+      }
 
       const [rentalRows] = await connection.query<Array<{
         rental_id: number;
@@ -942,10 +1100,16 @@ export class BookService {
         owner_id: number;
         renter_id: number;
         deposit_price: string;
-        status: 'กำลังยืม' | 'รอคืน' | 'คืนแล้ว' | 'เลยกำหนด';
+        rental_price: string;
+        net_rental_amount: string;
+        due_date: Date | null;
+        past_due_days: number;
+        status: '\u0e01\u0e33\u0e25\u0e31\u0e07\u0e22\u0e37\u0e21' | '\u0e23\u0e2d\u0e04\u0e37\u0e19' | '\u0e04\u0e37\u0e19\u0e41\u0e25\u0e49\u0e27' | '\u0e40\u0e25\u0e22\u0e01\u0e33\u0e2b\u0e19\u0e14';
       } & RowDataPacket>>(
         `
-        SELECT r.rental_id, r.book_id, b.title AS book_title, r.shop_id, r.owner_id, COALESCE(r.renter_id, r.borrower_id) AS renter_id, r.deposit_price, r.status
+        SELECT r.rental_id, r.book_id, b.title AS book_title, r.shop_id, r.owner_id,
+               COALESCE(r.renter_id, r.borrower_id) AS renter_id, r.deposit_price,
+               r.rental_price, r.net_rental_amount, r.due_date, r.past_due_days, r.status
         FROM rentals r
         JOIN books b ON b.book_id = r.book_id
         WHERE r.rental_id = ?
@@ -959,8 +1123,8 @@ export class BookService {
       }
 
       const rental = rentalRows[0];
-      if (rental.status !== 'รอคืน') {
-        throw new AppError('รายการนี้ยังไม่อยู่ในสถานะรอคืน', 400);
+      if (rental.status !== '\u0e23\u0e2d\u0e04\u0e37\u0e19') {
+        throw new AppError('Rental is not waiting for return', 400);
       }
 
       if (rental.shop_id) {
@@ -972,37 +1136,95 @@ export class BookService {
         throw new AppError('Unauthorized', 403);
       }
 
+      const overdueDaysRaw = rental.due_date
+        ? Math.max(0, Math.ceil((Date.now() - rental.due_date.getTime()) / 86400000))
+        : 0;
+      if (overdueDaysRaw > overdueFineMaxDays) {
+        throw new AppError('Auto-closed after 7 overdue days', 400);
+      }
+
+      const storedPastDueDays = Math.max(0, rental.past_due_days ?? 0);
+      const overdueDays = clampOverdueDays(Math.max(overdueDaysRaw, storedPastDueDays));
+      const depositPrice = Number(rental.deposit_price);
+      const rentalPrice = Number(rental.rental_price);
+      const conditionFineAmount = toMoney(depositPrice * input.conditionFineRate);
+      const overdueFineAmount = calcOverdueFine(rentalPrice, overdueDays);
+      const totalFine = toMoney(conditionFineAmount + overdueFineAmount);
+      const depositUsed = toMoney(Math.min(depositPrice, totalFine));
+      const walletCharged = toMoney(Math.max(0, totalFine - depositUsed));
+      const refundedAmount = toMoney(Math.max(0, depositPrice - depositUsed));
+
       const [renterRows] = await connection.query<UserBalanceRow[]>(
-        'SELECT user_id, balance FROM users WHERE user_id = ? AND deleted_at IS NULL FOR UPDATE',
+        'SELECT user_id, balance, suspended_until FROM users WHERE user_id = ? AND deleted_at IS NULL FOR UPDATE',
         [rental.renter_id],
       );
       if (renterRows.length === 0) {
         throw new AppError('User not found', 404);
       }
 
-      const refundedAmount = toMoney(Number(rental.deposit_price));
-      const balanceAfter = toMoney(Number(renterRows[0].balance) + refundedAmount);
+      const currentBalance = Number(renterRows[0].balance);
+      const balanceAfter = toMoney(currentBalance + refundedAmount - walletCharged);
 
-      await connection.query('UPDATE rentals SET status = ? WHERE rental_id = ?', ['คืนแล้ว', input.rentalId]);
-      await connection.query('UPDATE books SET status = ? WHERE book_id = ?', ['Available', rental.book_id]);
-      await connection.query('UPDATE users SET balance = ? WHERE user_id = ?', [balanceAfter, rental.renter_id]);
       await connection.query(
-        `
-        INSERT INTO wallet_transactions (user_id, transaction_type, amount, description, reference_id)
-        VALUES (?, 'REFUND', ?, ?, ?)
-        `,
-        [rental.renter_id, refundedAmount, `คืนเงินมัดจำ: ${rental.book_title}`, input.rentalId],
+        'UPDATE users SET balance = ? WHERE user_id = ?',
+        [balanceAfter, rental.renter_id],
       );
+
+      if (refundedAmount > 0) {
+        await connection.query(
+          `
+          INSERT INTO wallet_transactions (user_id, transaction_type, amount, description, reference_id)
+          VALUES (?, 'REFUND', ?, ?, ?)
+          `,
+          [rental.renter_id, refundedAmount, `คืนมัดจำ: ${rental.book_title}`, rental.rental_id],
+        );
+      }
+
+      if (walletCharged > 0) {
+        await connection.query(
+          `
+          INSERT INTO wallet_transactions (user_id, transaction_type, amount, description, reference_id)
+          VALUES (?, 'FINE', ?, ?, ?)
+          `,
+          [rental.renter_id, -walletCharged, `หักค่าปรับ: ${rental.book_title}`, rental.rental_id],
+        );
+      }
+
+      const ownerPayout = toMoney(Number(rental.net_rental_amount) + conditionFineAmount + overdueFineAmount);
+      if (ownerPayout > 0) {
+        await connection.query('UPDATE users SET balance = ROUND(balance + ?, 2) WHERE user_id = ?', [ownerPayout, rental.owner_id]);
+        await connection.query(
+          `
+          INSERT INTO wallet_transactions (user_id, transaction_type, amount, description, reference_id)
+          VALUES (?, 'PAYOUT', ?, ?, ?)
+          `,
+          [rental.owner_id, ownerPayout, `รับยอด: ${rental.book_title}`, rental.rental_id],
+        );
+      }
+
+      const finePaidAt = totalFine > 0 ? new Date() : null;
+      await connection.query(
+        'UPDATE rentals SET status = ?, past_due_days = ?, fine_paid_at = ?, condition_fine_rate = ?, condition_fine_amount = ? WHERE rental_id = ?',
+        ['\u0e04\u0e37\u0e19\u0e41\u0e25\u0e49\u0e27', overdueDays, finePaidAt, input.conditionFineRate, conditionFineAmount, input.rentalId],
+      );
+      await connection.query('UPDATE books SET status = ? WHERE book_id = ?', ['Available', rental.book_id]);
 
       await connection.commit();
 
       return {
         rentalId: input.rentalId,
         bookId: rental.book_id,
-        status: 'คืนแล้ว',
+        status: '\u0e04\u0e37\u0e19\u0e41\u0e25\u0e49\u0e27',
         refundedAmount,
         renterId: rental.renter_id,
         balanceAfter,
+        conditionFineRate: input.conditionFineRate,
+        conditionFineAmount,
+        overdueFineAmount,
+        totalFine,
+        depositUsed,
+        walletCharged,
+        ownerPayout,
       };
     } catch (error) {
       await connection.rollback();

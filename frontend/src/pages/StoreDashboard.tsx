@@ -51,9 +51,12 @@ interface ApiRental {
   rentalPrice: number;
   commissionRate: number;
   netRentalAmount: number;
+  depositPrice: number;
   status: "กำลังยืม" | "รอคืน" | "คืนแล้ว" | "เลยกำหนด";
   totalPrice: number;
   pastDueDays: number;
+  conditionFineRate: number;
+  conditionFineAmount: number;
   fineAmountDue: number;
   fineAmountTotal: number;
   finePaidAt: string | null;
@@ -118,6 +121,8 @@ const StoreDashboard = () => {
   const [shopForm, setShopForm] = useState({ shopName: "", description: "" });
   const [shopImageFile, setShopImageFile] = useState<File | null>(null);
   const [deleteShopConfirm, setDeleteShopConfirm] = useState("");
+  const [returnConfirmRental, setReturnConfirmRental] = useState<ApiRental | null>(null);
+  const [conditionFineRate, setConditionFineRate] = useState(0);
   const [form, setForm] = useState({
     title: "",
     author: "",
@@ -127,6 +132,8 @@ const StoreDashboard = () => {
     bookCondition: "2",
     description: "",
   });
+
+  const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
   const resetBookForm = () => {
     setForm({
@@ -173,8 +180,10 @@ const StoreDashboard = () => {
     },
   });
 
-  const totalRevenue = rentals.filter(o => o.status === "คืนแล้ว").reduce((s, o) => s + o.netRentalAmount, 0);
-  const totalPenalty = rentals.reduce((s, o) => s + o.fineAmountTotal, 0);
+  const completedRentals = rentals.filter((o) => o.status === "คืนแล้ว");
+  const totalRentalRevenue = completedRentals.reduce((s, o) => s + o.netRentalAmount, 0);
+  const totalPenalty = completedRentals.reduce((s, o) => s + o.fineAmountTotal, 0);
+  const totalRevenue = completedRentals.reduce((s, o) => s + o.netRentalAmount + o.fineAmountTotal, 0);
   const activeRentals = rentals.filter(o => o.status !== "คืนแล้ว").length;
   const overdueCount = rentals.filter(o => o.status === "เลยกำหนด").length;
 
@@ -446,27 +455,82 @@ const StoreDashboard = () => {
     }
   };
 
-  const handleConfirmReturnReceived = async (rentalId: number) => {
+  const openReturnConfirm = (rental: ApiRental) => {
+    setReturnConfirmRental(rental);
+    setConditionFineRate(0);
+  };
+
+  const closeReturnConfirm = () => {
+    setReturnConfirmRental(null);
+  };
+
+  const handleConfirmReturnReceived = async () => {
     if (!token) {
-      toast({ title: "กรุณาเข้าสู่ระบบก่อน", variant: "destructive" });
+      toast({ title: "กรุณาเข้าสู่ระบบ", variant: "destructive" });
       return;
     }
+    if (!returnConfirmRental) return;
 
     try {
-      await apiPost(`/api/books/rentals/${rentalId}/confirm-return`, {}, token);
-      toast({ title: "ยืนยันรับคืนหนังสือสำเร็จ" });
+      await apiPost(
+        `/api/books/rentals/${returnConfirmRental.rentalId}/confirm-return`,
+        { conditionFineRate },
+        token,
+      );
+      toast({ title: "ยืนยันการคืนสำเร็จ" });
+      closeReturnConfirm();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["shop-rentals", shopId] }),
         queryClient.invalidateQueries({ queryKey: ["admin-books", shopId] }),
       ]);
     } catch (error) {
       toast({
-        title: "ยืนยันรับคืนไม่สำเร็จ",
-        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        title: "เกิดข้อผิดพลาดในการยืนยันการคืน",
+        description: error instanceof HttpError ? error.message : "Unexpected error",
         variant: "destructive",
       });
     }
   };
+
+
+  const handleReportRental = async (rental: ApiRental) => {
+    if (!token) {
+      toast({ title: "กรุณาเข้าสู่ระบบ", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await apiPost(
+        `/api/books/${rental.bookId}/report`,
+        {
+          reason: "ผู้เช่าทำหนังสือเสียหาย/ไม่ส่งหนังสือคืน",
+          details: `rentalId=${rental.rentalId}; renterId=${rental.renterId}; conditionFineRate=${rental.conditionFineRate}; pastDueDays=${rental.pastDueDays}`,
+        },
+        token,
+      );
+      toast({ title: "ส่งรายงานแล้ว" });
+    } catch (error) {
+      toast({
+        title: "เกิดข้อผิดพลาดในการรายงาน",
+        description: error instanceof HttpError ? error.message : "Unexpected error",
+        variant: "destructive",
+      });
+    }
+  };
+
+
+  const returnSummary = returnConfirmRental
+    ? (() => {
+      const overdueDays = Math.min(7, Math.max(0, returnConfirmRental.pastDueDays));
+      const overdueFine = roundMoney(returnConfirmRental.rentalPrice * 0.25 * overdueDays);
+      const conditionFine = roundMoney(returnConfirmRental.depositPrice * conditionFineRate);
+      const totalFine = roundMoney(conditionFine + overdueFine);
+      const depositUsed = roundMoney(Math.min(returnConfirmRental.depositPrice, totalFine));
+      const walletCharged = roundMoney(Math.max(0, totalFine - depositUsed));
+      const refundAmount = roundMoney(Math.max(0, returnConfirmRental.depositPrice - depositUsed));
+      return { overdueDays, overdueFine, conditionFine, totalFine, depositUsed, walletCharged, refundAmount };
+    })()
+    : null;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -687,15 +751,23 @@ const StoreDashboard = () => {
                             )}
                             <Button
                               size="sm"
-                              onClick={() => {
-                                void handleConfirmReturnReceived(rental.rentalId);
-                              }}
+                              onClick={() => openReturnConfirm(rental)}
                             >
                               ยืนยันได้รับหนังสือแล้ว
                             </Button>
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">-</span>
+                          rental.status === "คืนแล้ว" && rental.pastDueDays >= 7 && !rental.returnRequestedAt ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleReportRental(rental)}
+                            >
+                              Report
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )
                         )}
                       </TableCell>
                     </TableRow>
@@ -709,7 +781,7 @@ const StoreDashboard = () => {
               <div className="bg-card rounded-xl border p-6">
                 <h3 className="font-display font-semibold text-lg mb-4 flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" /> สรุปรายได้</h3>
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center py-3 border-b"><span className="text-muted-foreground">รายได้จากค่าเช่า</span><span className="font-bold text-lg">฿{totalRevenue.toLocaleString()}</span></div>
+                  <div className="flex justify-between items-center py-3 border-b"><span className="text-muted-foreground">รายได้จากค่าเช่า</span><span className="font-bold text-lg">฿{totalRentalRevenue.toLocaleString()}</span></div>
                   <div className="flex justify-between items-center py-3 border-b"><span className="text-muted-foreground">รายได้จากค่าปรับ</span><span className="font-bold text-lg text-destructive">฿{totalPenalty.toLocaleString()}</span></div>
                 </div>
               </div>
@@ -737,6 +809,66 @@ const StoreDashboard = () => {
             </div>
           </TabsContent>
         </Tabs>
+
+        <Dialog
+          open={Boolean(returnConfirmRental)}
+          onOpenChange={(open) => {
+            if (!open) {
+              closeReturnConfirm();
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{"สรุปการคืนหนังสือ"}</DialogTitle>
+            </DialogHeader>
+            {returnConfirmRental && returnSummary ? (
+              <div className="space-y-4">
+                <div className="rounded-lg border p-3 space-y-1">
+                  <p className="font-semibold">{returnConfirmRental.bookTitle}</p>
+                  <p className="text-xs text-muted-foreground">RENT-{returnConfirmRental.rentalId} - {returnConfirmRental.renterName}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>{"ค่าปรับสภาพ"}</Label>
+                  <Select value={String(conditionFineRate)} onValueChange={(value) => setConditionFineRate(Number(value))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="0%" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0%</SelectItem>
+                      <SelectItem value="0.25">25%</SelectItem>
+                      <SelectItem value="0.5">50%</SelectItem>
+                      <SelectItem value="0.75">75%</SelectItem>
+                      <SelectItem value="1">100%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {returnSummary.overdueDays > 0
+                      ? `เลยกำหนด ${returnSummary.overdueDays} วัน`
+                      : "ไม่เลยกำหนด"}
+                  </p>
+                </div>
+
+                <div className="rounded-lg bg-muted/50 p-3 space-y-2 text-sm">
+                  <div className="flex justify-between"><span>{"ค่าปรับสภาพ"}</span><span>{"฿"}{returnSummary.conditionFine.toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>{"ค่าปรับเลยกำหนด"}</span><span>{"฿"}{returnSummary.overdueFine.toLocaleString()}</span></div>
+                  <div className="flex justify-between font-semibold"><span>{"รวมค่าปรับ"}</span><span>{"฿"}{returnSummary.totalFine.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs text-muted-foreground"><span>{"หักจากมัดจำ"}</span><span>{"฿"}{returnSummary.depositUsed.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs text-muted-foreground"><span>{"เรียกเก็บจากวอลเล็ต"}</span><span>{"฿"}{returnSummary.walletCharged.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs text-muted-foreground"><span>{"คืนมัดจำ"}</span><span>{"฿"}{returnSummary.refundAmount.toLocaleString()}</span></div>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={closeReturnConfirm}>{"ยกเลิก"}</Button>
+                  <Button onClick={() => { void handleConfirmReturnReceived(); }}>
+                    {"ยืนยันรับคืน"}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </DialogContent>
+        </Dialog>
 
         <Dialog
           open={editShopOpen}

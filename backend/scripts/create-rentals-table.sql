@@ -15,6 +15,8 @@ CREATE TABLE rentals (
     total_amount DECIMAL(10,2) NOT NULL,
     past_due_days INT NOT NULL DEFAULT 0,
     fine_paid_at DATETIME NULL,
+    condition_fine_rate DECIMAL(4,2) NOT NULL DEFAULT 0.00,
+    condition_fine_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     status ENUM('กำลังยืม', 'รอคืน', 'คืนแล้ว', 'เลยกำหนด') NOT NULL DEFAULT 'กำลังยืม',
     return_requested_at DATETIME NULL,
     return_delivery_sent_at DATETIME NULL,

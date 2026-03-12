@@ -118,7 +118,7 @@ export interface TopUpWalletResponse {
 
 interface WalletTransactionRow extends RowDataPacket {
   transaction_id: number;
-  transaction_type: 'TOPUP' | 'RENTAL' | 'REFUND';
+  transaction_type: 'TOPUP' | 'RENTAL' | 'REFUND' | 'FINE' | 'PAYOUT';
   amount: string;
   description: string;
   created_at: Date;
@@ -126,7 +126,7 @@ interface WalletTransactionRow extends RowDataPacket {
 
 export interface WalletTransactionItem {
   transactionId: number;
-  type: 'TOPUP' | 'RENTAL' | 'REFUND';
+  type: 'TOPUP' | 'RENTAL' | 'REFUND' | 'FINE' | 'PAYOUT';
   amount: number;
   description: string;
   createdAt: string;
@@ -518,7 +518,11 @@ export class AuthService {
     }
 
     const normalizedAmount = Math.round(amount * 100) / 100;
-    const updatedUser = await this.userRepository.incrementBalanceById(input.userId, normalizedAmount);
+    let updatedUser = await this.userRepository.incrementBalanceById(input.userId, normalizedAmount);
+    if (Number(updatedUser.balance) >= 0 && updatedUser.suspendedUntil && updatedUser.suspendedUntil.getTime() > Date.now()) {
+      await dbPool.query('UPDATE users SET suspended_until = NULL WHERE user_id = ?', [input.userId]);
+      updatedUser = { ...updatedUser, suspendedUntil: null };
+    }
     await dbPool.query(
       `
       INSERT INTO wallet_transactions (user_id, transaction_type, amount, description)

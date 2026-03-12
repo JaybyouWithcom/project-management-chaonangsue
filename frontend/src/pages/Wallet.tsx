@@ -25,7 +25,7 @@ interface AuthUser {
 
 interface WalletTransaction {
   transactionId: number;
-  type: "TOPUP" | "RENTAL" | "REFUND";
+  type: "TOPUP" | "RENTAL" | "REFUND" | "FINE" | "PAYOUT";
   amount: number;
   description: string;
   createdAt: string;

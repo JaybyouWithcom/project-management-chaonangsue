@@ -101,6 +101,8 @@ interface RentalOrder {
   status: "กำลังยืม" | "รอคืน" | "คืนแล้ว" | "เลยกำหนด";
   totalPrice: number;
   pastDueDays: number;
+  conditionFineRate: number;
+  conditionFineAmount: number;
   fineAmountDue: number;
   fineAmountTotal: number;
   finePaidAt: string | null;
@@ -192,6 +194,7 @@ const CustomerDashboard = () => {
   const [returnCarrierById, setReturnCarrierById] = useState<Record<number, string>>({});
   const [returnTrackingById, setReturnTrackingById] = useState<Record<number, string>>({});
   const [pausedAtById, setPausedAtById] = useState<Record<number, number>>({});
+  const [simulatedDaysById, setSimulatedDaysById] = useState<Record<number, number>>({});
   const activationInFlightRef = useRef<Record<number, boolean>>({});
   const [reviewingOrder, setReviewingOrder] = useState<RentalOrder | null>(null);
   const [reviewRating, setReviewRating] = useState<number>(0);
@@ -434,7 +437,16 @@ const CustomerDashboard = () => {
     }
 
     try {
-      await apiPost(`/api/books/rentals/${order.rentalId}/return`, {}, token);
+      const simulatedOffsetDays = simulatedDaysById[order.rentalId] ?? 0;
+      const simulatedNow = (pausedAtById[order.rentalId] ?? Date.now()) + simulatedOffsetDays * 86400000;
+      const daysLeft = order.endDate ? getDaysRemaining(order.endDate, simulatedNow) : null;
+      const simulatedOverdueDays = daysLeft !== null && daysLeft < 0 ? Math.min(7, Math.abs(daysLeft)) : 0;
+
+      await apiPost(
+        `/api/books/rentals/${order.rentalId}/return`,
+        simulatedOverdueDays > 0 ? { simulatedOverdueDays } : {},
+        token,
+      );
       setReturnStepById((prev) => ({ ...prev, [order.rentalId]: 1 }));
       setPausedAtById((prev) => ({ ...prev, [order.rentalId]: Date.now() }));
       setReturningRentalId(null);
@@ -460,6 +472,21 @@ const CustomerDashboard = () => {
       return next;
     });
   };
+  const incrementSimulatedDays = (rentalId: number, step = 1) => {
+    setSimulatedDaysById((prev) => ({
+      ...prev,
+      [rentalId]: (prev[rentalId] ?? 0) + step,
+    }));
+  };
+
+  const resetSimulatedDays = (rentalId: number) => {
+    setSimulatedDaysById((prev) => {
+      const next = { ...prev };
+      delete next[rentalId];
+      return next;
+    });
+  };
+
 
   const handleCancelReturn = (rentalId: number) => {
     setReturningRentalId(null);
@@ -519,7 +546,7 @@ const CustomerDashboard = () => {
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="font-semibold">{order.bookTitle}</p>
-                      <p className="text-xs text-muted-foreground">เช่า-{order.rentalId}</p>
+                      <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
@@ -564,15 +591,17 @@ const CustomerDashboard = () => {
                 const isResimulating = Boolean(tracking?.forceResimulate);
                 const delivered = Boolean(order.startDate && order.endDate && !isResimulating);
                 const pausedAt = pausedAtById[order.rentalId];
+                const simulatedOffsetDays = simulatedDaysById[order.rentalId] ?? 0;
+                const simulatedNow = (pausedAt ?? Date.now()) + simulatedOffsetDays * 86400000;
                 const totalDays = planDaysMap[order.rentalPlan] ?? 15;
                 const daysLeft = delivered && order.endDate
-                  ? getDaysRemaining(order.endDate, pausedAt ?? Date.now())
+                  ? getDaysRemaining(order.endDate, simulatedNow)
                   : null;
                 const isLowTime = daysLeft !== null && daysLeft <= 2;
                 const remainingLabel = pausedAt
                   ? "หยุดจับเวลาแล้ว"
                   : daysLeft !== null
-                    ? (daysLeft > 0 ? `${daysLeft} วัน` : "เลยกำหนดแล้ว!")
+                    ? (daysLeft > 0 ? `${daysLeft} วัน` : daysLeft === 0 ? "0 วัน" : `เลยกำหนดแล้ว ${Math.abs(daysLeft)} วัน!`)
                     : "-";
                 const progressValue = pausedAt
                   ? 100
@@ -580,7 +609,13 @@ const CustomerDashboard = () => {
                     ? Math.max(0, Math.min(100, (1 - daysLeft / totalDays) * 100))
                     : 0;
 
-  return (
+                const simulatedOverdueDays = daysLeft !== null && daysLeft < 0 ? Math.min(7, Math.abs(daysLeft)) : 0;
+                const overdueDays = simulatedOverdueDays > 0
+                  ? simulatedOverdueDays
+                  : (order.status === "เลยกำหนด" ? Math.min(7, Math.max(order.pastDueDays, 1)) : 0);
+                const overdueFine = Math.round(order.rentalPrice * 0.25 * overdueDays * 100) / 100;
+
+                return (
                   <div key={order.rentalId} className="bg-card rounded-xl border p-4 md:p-6 space-y-4">
                     <div className="flex flex-col md:flex-row gap-4">
                       <img src={resolveImageUrl(order.bookCover)} alt={order.bookTitle} className="w-20 h-28 rounded-lg object-cover shrink-0" />
@@ -588,11 +623,16 @@ const CustomerDashboard = () => {
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
                             <h3 className="font-display font-semibold text-lg">{order.bookTitle}</h3>
-                            <p className="text-xs text-muted-foreground">เช่า-{order.rentalId}</p>
+                            <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
                           </div>
                           <Badge className={`${statusColors[order.status]} border`}>
                             <Icon className="h-3 w-3 mr-1" /> {order.status}
                           </Badge>
+                          {overdueDays > 0 && (
+                            <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/20">
+                              ค่าปรับล่าช้า
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                           <span>รับ: {delivered ? new Date(order.startDate!).toLocaleDateString() : "—"}</span>
@@ -616,21 +656,23 @@ const CustomerDashboard = () => {
                       </div>
                     </div>
 
-                    {order.status === "เลยกำหนด" && (
+                    {overdueDays > 0 && (
                       <div className="bg-destructive/10 rounded-lg p-3 text-sm">
-                        <span className="text-destructive font-semibold">ค่าปรับ: ฿{order.fineAmountDue}</span>
-                        <span className="text-muted-foreground ml-2">(เลยกำหนด {order.pastDueDays} วัน)</span>
-                        {order.finePaidAt ? (
-                          <span className="ml-2 text-success">ชำระแล้ว</span>
-                        ) : (
-                          <Button
-                            size="sm"
-                            className="ml-3"
-                            onClick={() => { void handlePayFine(order.rentalId); }}
-                          >
-                            ชำระค่าปรับ
-                          </Button>
-                        )}
+                        <span className="text-destructive font-semibold">ค่าปรับ: ฿{overdueFine.toLocaleString()}</span>
+                        <span className="text-muted-foreground ml-2">(เลยกำหนด {overdueDays} วัน)</span>
+                        {order.status === "เลยกำหนด" ? (
+                          order.finePaidAt ? (
+                            <span className="ml-2 text-success">ชำระแล้ว</span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              className="ml-3"
+                              onClick={() => { void handlePayFine(order.rentalId); }}
+                            >
+                              ชำระค่าปรับ
+                            </Button>
+                          )
+                        ) : null}
                       </div>
                     )}
 
@@ -706,7 +748,42 @@ const CustomerDashboard = () => {
                           </div>
                         </div>
                       )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => incrementSimulatedDays(order.rentalId, 15)}
+                      >
+                        +15 วัน
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => incrementSimulatedDays(order.rentalId, 7)}
+                      >
+                        +7 วัน
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => incrementSimulatedDays(order.rentalId)}
+                      >
+                        +1 วัน
+                      </Button>
+                      {simulatedOffsetDays > 0 ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => resetSimulatedDays(order.rentalId)}
+                        >
+                          Reset
+                        </Button>
+                      ) : null}
+                      {simulatedOffsetDays > 0 ? (
+                        <Badge variant="secondary">Sim +{simulatedOffsetDays}d</Badge>
+                      ) : null}
                     </div>
+                  </div>
                 );
               })
             )}
@@ -731,7 +808,7 @@ const CustomerDashboard = () => {
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <p className="font-semibold">{order.bookTitle}</p>
-                        <p className="text-xs text-muted-foreground">เช่า-{order.rentalId}</p>
+                        <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
                       </div>
                       <Badge variant="secondary">
                         ขั้นตอน {Math.min(returnStepById[order.rentalId] ?? 1, returnSteps.length)}/{returnSteps.length}
@@ -759,14 +836,23 @@ const CustomerDashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {historyOrders.map((order) => (
+            {historyOrders.length === 0 ? (
+              <p className="text-muted-foreground">ยังไม่มีประวัติการเช่า</p>
+            ) : (
+              historyOrders.map((order) => {
+              const overdueFineHistory = Math.round(order.rentalPrice * 0.25 * Math.min(7, Math.max(order.pastDueDays, 0)) * 100) / 100;
+              const totalFineHistory = Math.max(0, order.fineAmountTotal ?? (overdueFineHistory + order.conditionFineAmount));
+              const refundedDeposit = Math.max(0, order.depositPrice - totalFineHistory);
+              const extraCharged = Math.max(0, totalFineHistory - order.depositPrice);
+
+              return (
               <div key={order.rentalId} className="bg-card rounded-xl border p-4 md:p-6 flex flex-col md:flex-row gap-4 opacity-80">
                 <img src={resolveImageUrl(order.bookCover)} alt={order.bookTitle} className="w-20 h-28 rounded-lg object-cover shrink-0" />
                 <div className="flex-1">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <h3 className="font-display font-semibold">{order.bookTitle}</h3>
-                      <p className="text-xs text-muted-foreground">เช่า-{order.rentalId}</p>
+                      <p className="text-xs text-muted-foreground">RENT-{order.rentalId}</p>
                     </div>
                     <Badge variant="secondary"><CheckCircle className="h-3 w-3 mr-1" /> คืนแล้ว</Badge>
                   </div>
@@ -775,8 +861,33 @@ const CustomerDashboard = () => {
                     <span>฿{order.totalPrice}</span>
                   </div>
                   <div className="mt-2 text-sm">
-                    <span className="text-success font-medium">คืนมัดจำแล้ว: ฿{order.depositPrice}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-muted-foreground">มัดจำ: ฿{order.depositPrice.toLocaleString()}</span>
+                      {totalFineHistory > 0 ? (
+                        <span className="text-destructive font-medium">หักค่าปรับ: -฿{totalFineHistory.toLocaleString()}</span>
+                      ) : (
+                        <span className="text-success font-medium">ไม่มีค่าปรับ</span>
+                      )}
+                      <span className="text-success font-medium">คืนสุทธิ: ฿{refundedDeposit.toLocaleString()}</span>
+                      {extraCharged > 0 ? (
+                        <span className="text-destructive font-medium">ตัดบัญชี: ฿{extraCharged.toLocaleString()}</span>
+                      ) : null}
+                    </div>
                   </div>
+                  {(order.pastDueDays > 0 || order.conditionFineAmount > 0) && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {order.pastDueDays > 0 && (
+                        <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/20">
+                          {"\u0e04\u0e48\u0e32\u0e1b\u0e23\u0e31\u0e1a\u0e25\u0e48\u0e32\u0e0a\u0e49\u0e32"}
+                        </Badge>
+                      )}
+                      {order.conditionFineAmount > 0 && (
+                        <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-amber-200">
+                          {"\u0e04\u0e48\u0e32\u0e1b\u0e23\u0e31\u0e1a\u0e2a\u0e20\u0e32\u0e1e"}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button asChild variant="outline" size="sm">
                       <Link to={`/book/${order.bookId}`}>เช่าอีกครั้ง</Link>
@@ -793,7 +904,9 @@ const CustomerDashboard = () => {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })
+          )}
           </CardContent>
         </Card>
       </div>

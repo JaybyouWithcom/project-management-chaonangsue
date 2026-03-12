@@ -1,7 +1,7 @@
 CREATE TABLE wallet_transactions (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    transaction_type ENUM('TOPUP', 'RENTAL', 'REFUND') NOT NULL,
+    transaction_type ENUM('TOPUP', 'RENTAL', 'REFUND', 'FINE', 'PAYOUT') NOT NULL,
     amount DECIMAL(10,2) NOT NULL,
     description VARCHAR(255) NOT NULL,
     reference_id INT NULL,

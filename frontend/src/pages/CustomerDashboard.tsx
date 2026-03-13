@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Clock, Package, BookOpen, AlertTriangle, CheckCircle, Calendar, Truck, RotateCcw, RotateCw, Check, Star } from "lucide-react";
+import { Clock, Package, BookOpen, AlertTriangle, CheckCircle, Calendar, Truck, RotateCcw, RotateCw, Check, Star, ClipboardList, House, Store } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -115,42 +115,45 @@ interface RentalOrder {
   reviewComment: string | null;
 }
 
-const StepProgress = ({ steps, completedCount }: { steps: string[]; completedCount: number }) => {
+const StepProgress = ({ steps, completedCount, icons }: { steps: string[]; completedCount: number; icons: React.ElementType[] }) => {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center">
-        {steps.map((step, index) => {
-          const completed = index < completedCount;
-          const active = index === completedCount && completedCount < steps.length;
-          return (
-            <div key={step} className="flex items-center flex-1 min-w-0">
-              <div
-                className={[
-                  "h-8 w-8 rounded-full border flex items-center justify-center shrink-0",
-                  completed ? "bg-primary text-primary-foreground border-primary" : active ? "border-primary text-primary" : "border-muted text-muted-foreground",
-                ].join(" ")}
-              >
-                {completed ? <Check className="h-4 w-4" /> : <span className="text-xs font-semibold">{index + 1}</span>}
+    <div className="flex w-full">
+      {steps.map((step, index) => {
+        const completed = index < completedCount;
+        const active = index === completedCount && completedCount < steps.length;
+        const Icon = icons[index];
+        
+        return (
+          <div key={step} className="flex-1 flex flex-col items-center relative">
+            {/* เส้นเชื่อม (ใช้ absolute วางให้อยู่กึ่งกลางวงกลมปัจจุบันไปจนถึงวงกลมถัดไป) */}
+            {index < steps.length - 1 && (
+              <div className="absolute top-4 left-1/2 w-full h-0.5 bg-muted z-0">
+                <div className={completed ? "h-full bg-primary w-full" : "h-full bg-muted w-full"} />
               </div>
-              {index < steps.length - 1 && (
-                <div className="flex-1 h-px mx-2 bg-muted">
-                  <div className={completed ? "h-px bg-primary w-full" : "h-px bg-muted w-full"} />
-                </div>
-              )}
+            )}
+
+            {/* วงกลม (กำหนด z-10 และ bg-background เพื่อบังเส้นที่วิ่งผ่าน) */}
+            <div
+              className={[
+                "h-8 w-8 rounded-full border flex items-center justify-center shrink-0 relative z-10 bg-background",
+                completed ? "bg-primary text-primary-foreground border-primary" : active ? "border-primary text-primary" : "border-muted text-muted-foreground",
+              ].join(" ")}
+            >
+              {completed ? <Check className="h-4 w-4" /> : Icon ? <Icon className="h-4 w-4" /> : <span className="text-xs font-semibold">{index + 1}</span>}
             </div>
-          );
-        })}
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-        {steps.map((step, index) => (
-          <div
-            key={`${step}-label`}
-            className={index < completedCount ? "text-primary font-medium" : "text-muted-foreground"}
-          >
-            {step}
+
+            {/* ตัวหนังสือ */}
+            <div
+              className={[
+                "mt-3 w-full px-1 text-center text-xs break-words",
+                index < completedCount ? "text-primary font-medium" : "text-muted-foreground",
+              ].join(" ")}
+            >
+              {step}
+            </div>
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 };
@@ -621,6 +624,7 @@ const CustomerDashboard = () => {
                   <StepProgress
                     steps={receiveSteps}
                     completedCount={Math.min(receiveTrackingById[order.rentalId]?.step ?? 1, receiveSteps.length)}
+                    icons={[ClipboardList, Package, Truck, House]}
                   />
                 </div>
               ))
@@ -881,6 +885,7 @@ const CustomerDashboard = () => {
                     <StepProgress
                       steps={returnSteps}
                       completedCount={Math.min(returnStepById[order.rentalId] ?? 1, returnSteps.length)}
+                      icons={[Truck, Store]}
                     />
                     <div className="text-sm text-muted-foreground">
                       {returnCarrierById[order.rentalId] ? `บริษัทขนส่ง: ${returnCarrierById[order.rentalId]}` : null}

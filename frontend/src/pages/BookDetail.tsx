@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
-import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { normalizeConditionLabel } from "@/lib/bookCondition";
 import { Address, formatAddressLine, listAddresses } from "@/lib/addresses";
@@ -95,6 +95,10 @@ const BookDetail = () => {
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reportDetails, setReportDetails] = useState("");
+  const [editingReview, setEditingReview] = useState<BookReview | null>(null);
+  const [editingRating, setEditingRating] = useState<number>(0);
+  const [editingComment, setEditingComment] = useState<string>("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   const reportReasons = [
     "สภาพหนังสือไม่ตรงตามที่ระบุไว้",
@@ -161,6 +165,72 @@ const BookDetail = () => {
       return response.data;
     },
   });
+
+  const openEditReview = (review: BookReview) => {
+    setEditingReview(review);
+    setEditingRating(review.rating);
+    setEditingComment(review.comment ?? "");
+  };
+
+  const handleUpdateReview = async () => {
+    if (!token || !id || !editingReview) return;
+    if (editingRating < 1 || editingRating > 5) {
+      toast({ title: "ให้คะแนน 1-5 ดาว", variant: "destructive" });
+      return;
+    }
+
+    setReviewSubmitting(true);
+    try {
+      await apiPatch(
+        `/api/books/${id}/reviews/${editingReview.reviewId}`,
+        {
+          rating: editingRating,
+          comment: editingComment.trim() ? editingComment.trim() : null,
+        },
+        token,
+      );
+      toast({ title: "อัปเดตรีวิวสำเร็จ" });
+      setEditingReview(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["book-reviews", id, "preview"] }),
+        queryClient.invalidateQueries({ queryKey: ["book-reviews", id, "all"] }),
+        queryClient.invalidateQueries({ queryKey: ["book", id] }),
+      ]);
+    } catch (error) {
+      toast({
+        title: "อัปเดตรีวิวไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  const handleDeleteReview = async (review: BookReview) => {
+    if (!token || !id) return;
+    const confirmed = window.confirm("ยืนยันการลบรีวิวของคุณ?");
+    if (!confirmed) return;
+
+    try {
+      await apiDelete(`/api/books/${id}/reviews/${review.reviewId}`, token);
+      toast({ title: "ลบรีวิวสำเร็จ" });
+      if (editingReview?.reviewId === review.reviewId) {
+        setEditingReview(null);
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["book-reviews", id, "preview"] }),
+        queryClient.invalidateQueries({ queryKey: ["book-reviews", id, "all"] }),
+        queryClient.invalidateQueries({ queryKey: ["book", id] }),
+      ]);
+    } catch (error) {
+      toast({
+        title: "ลบรีวิวไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     if (addresses.length === 0) {
@@ -317,6 +387,16 @@ const BookDetail = () => {
                   {review.comment && (
                     <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">{review.comment}</p>
                   )}
+                  {token && currentUserId === review.userId && (
+                    <div className="mt-3 flex gap-2">
+                      <Button variant="secondary" size="sm" onClick={() => openEditReview(review)}>
+                        แก้ไขรีวิว
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => { void handleDeleteReview(review); }}>
+                        ลบรีวิว
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -330,6 +410,7 @@ const BookDetail = () => {
   }
 
   const book = detailQuery.data;
+  const currentUserId = meQuery.data?.userId ?? null;
   const isOwnBook = Boolean(meQuery.data?.userId && meQuery.data.userId === book.ownerId);
   const averageRating = Number(book.ratingAverage ?? 0);
   const reviewCount = Number(book.reviewCount ?? 0);
@@ -466,7 +547,7 @@ const BookDetail = () => {
             <div className="bg-card rounded-xl border p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-bold">รีวิว</h3>
+                  <h3 className="text-lg font-bold">คนอื่น ๆ ว่ายังไงบ้าง?</h3>
                   <p className="text-sm text-muted-foreground">
                     {reviewCount > 0 ? `คะแนนเฉลี่ย ${averageRating.toFixed(1)} จาก ${reviewCount} รีวิว` : "ยังไม่มีรีวิวสำหรับหนังสือเล่มนี้"}
                   </p>
@@ -500,6 +581,16 @@ const BookDetail = () => {
                       </div>
                       {review.comment && (
                         <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">{review.comment}</p>
+                      )}
+                      {token && currentUserId === review.userId && (
+                        <div className="mt-3 flex gap-2">
+                          <Button variant="secondary" size="sm" onClick={() => openEditReview(review)}>
+                            แก้ไขรีวิว
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => { void handleDeleteReview(review); }}>
+                            ลบรีวิว
+                          </Button>
+                        </div>
                       )}
                     </div>
                   ))}
@@ -562,6 +653,58 @@ const BookDetail = () => {
                 ยกเลิก
               </Button>
               <Button onClick={handleSubmitReport}>ส่งรายงาน</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={Boolean(editingReview)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingReview(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>แก้ไขรีวิวของคุณ</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setEditingRating(star)}
+                    className="rounded p-1"
+                    aria-label={`Rate ${star} stars`}
+                  >
+                    <Star
+                      className={star <= editingRating ? "h-5 w-5 text-accent fill-current" : "h-5 w-5 text-muted-foreground"}
+                    />
+                  </button>
+                ))}
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {editingRating > 0 ? `${editingRating} ดาว` : "ให้คะแนนรีวิวนี้"}
+              </span>
+            </div>
+            <div>
+              <Textarea
+                rows={4}
+                placeholder="แก้ไขความคิดเห็นของคุณ"
+                value={editingComment}
+                onChange={(event) => setEditingComment(event.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditingReview(null)} disabled={reviewSubmitting}>
+                ยกเลิก
+              </Button>
+              <Button onClick={() => { void handleUpdateReview(); }} disabled={reviewSubmitting}>
+                {reviewSubmitting ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
+              </Button>
             </div>
           </div>
         </DialogContent>

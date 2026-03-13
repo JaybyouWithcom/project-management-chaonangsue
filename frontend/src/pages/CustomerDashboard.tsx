@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { apiGet, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch, apiPost, HttpError, resolveImageUrl } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import thailandPostLogo from "@/assets/logistics/thailand-post.png";
@@ -112,6 +112,7 @@ interface RentalOrder {
   returnDeliveryProofPath: string | null;
   reviewId: number | null;
   reviewRating: number | null;
+  reviewComment: string | null;
 }
 
 const StepProgress = ({ steps, completedCount }: { steps: string[]; completedCount: number }) => {
@@ -200,10 +201,11 @@ const CustomerDashboard = () => {
   const [reviewRating, setReviewRating] = useState<number>(0);
   const [reviewComment, setReviewComment] = useState<string>("");
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const isEditingReview = Boolean(reviewingOrder?.reviewId);
   const openReviewDialog = (order: RentalOrder) => {
     setReviewingOrder(order);
-    setReviewRating(0);
-    setReviewComment("");
+    setReviewRating(order.reviewRating ?? 0);
+    setReviewComment(order.reviewComment ?? "");
   };
 
   const handleSubmitReview = async () => {
@@ -215,23 +217,52 @@ const CustomerDashboard = () => {
 
     setReviewSubmitting(true);
     try {
-      await apiPost(`/api/books/${reviewingOrder.bookId}/reviews`, {
-        rentalId: reviewingOrder.rentalId,
-        rating: reviewRating,
-        comment: reviewComment.trim() ? reviewComment.trim() : null,
-      }, token);
+      if (reviewingOrder.reviewId) {
+        await apiPatch(`/api/books/${reviewingOrder.bookId}/reviews/${reviewingOrder.reviewId}`, {
+          rating: reviewRating,
+          comment: reviewComment.trim() ? reviewComment.trim() : null,
+        }, token);
+        toast({ title: "อัปเดตรีวิวสำเร็จ" });
+      } else {
+        await apiPost(`/api/books/${reviewingOrder.bookId}/reviews`, {
+          rentalId: reviewingOrder.rentalId,
+          rating: reviewRating,
+          comment: reviewComment.trim() ? reviewComment.trim() : null,
+        }, token);
+        toast({ title: "ขอบคุณสำหรับความคิดเห็นของคุณ!" });
+      }
 
-      toast({ title: "ขอบคุณสำหรับความคิดเห็นของคุณ!" });
       setReviewingOrder(null);
       await queryClient.invalidateQueries({ queryKey: ["my-rentals"] });
     } catch (error) {
       toast({
-        title: "ส่งรีวิวไม่สำเร็จ",
+        title: reviewingOrder.reviewId ? "อัปเดตรีวิวไม่สำเร็จ" : "ส่งรีวิวไม่สำเร็จ",
         description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
         variant: "destructive",
       });
     } finally {
       setReviewSubmitting(false);
+    }
+  };
+
+  const handleDeleteReview = async (order: RentalOrder) => {
+    if (!token || !order.reviewId) return;
+    const confirmed = window.confirm("ยืนยันการลบรีวิวของคุณ?");
+    if (!confirmed) return;
+
+    try {
+      await apiDelete(`/api/books/${order.bookId}/reviews/${order.reviewId}`, token);
+      toast({ title: "ลบรีวิวสำเร็จ" });
+      if (reviewingOrder?.reviewId === order.reviewId) {
+        setReviewingOrder(null);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["my-rentals"] });
+    } catch (error) {
+      toast({
+        title: "ลบรีวิวไม่สำเร็จ",
+        description: error instanceof HttpError ? error.message : "เกิดข้อผิดพลาด",
+        variant: "destructive",
+      });
     }
   };
 
@@ -926,9 +957,14 @@ const CustomerDashboard = () => {
                       <Link to={`/book/${order.bookId}`}>เช่าอีกครั้ง</Link>
                     </Button>
                     {order.reviewId ? (
-                      <Button variant="secondary" size="sm" disabled>
-                        รีวิวแล้ว
-                      </Button>
+                      <>
+                        <Button variant="secondary" size="sm" onClick={() => openReviewDialog(order)}>
+                          แก้ไขรีวิว
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => { void handleDeleteReview(order); }}>
+                          ลบรีวิว
+                        </Button>
+                      </>
                     ) : (
                       <Button variant="outline" size="sm" onClick={() => openReviewDialog(order)}>
                         เขียนรีวิว
@@ -953,7 +989,7 @@ const CustomerDashboard = () => {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>การเช่าครั้งนี้เป็นยังไงบ้าง?</DialogTitle>
+            <DialogTitle>{isEditingReview ? "แก้ไขรีวิวของคุณ" : "การเช่าครั้งนี้เป็นยังไงบ้าง?"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -990,7 +1026,7 @@ const CustomerDashboard = () => {
                 ยกเลิก
               </Button>
               <Button onClick={() => { void handleSubmitReview(); }} disabled={reviewSubmitting}>
-                {reviewSubmitting ? "กำลังส่ง..." : "ส่งรีวิว"}
+                {reviewSubmitting ? "กำลังส่ง..." : isEditingReview ? "บันทึกการแก้ไข" : "ส่งรีวิว"}
               </Button>
             </div>
           </div>

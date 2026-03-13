@@ -296,6 +296,66 @@ export class BookController {
     sendSuccess(res, result, 201);
   };
 
+  updateReview = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const bookId = Number(req.params.bookId);
+    if (!Number.isInteger(bookId)) {
+      throw new AppError('Invalid bookId', 400);
+    }
+
+    const reviewId = Number(req.params.reviewId);
+    if (!Number.isInteger(reviewId)) {
+      throw new AppError('Invalid reviewId', 400);
+    }
+
+    const { rating, comment } = req.body as Record<string, unknown>;
+    const parsedRating = Number(rating);
+
+    if (!isInteger(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+      throw new AppError('rating must be between 1 and 5', 400);
+    }
+
+    const trimmedComment = typeof comment === 'string' ? comment.trim() : '';
+    const finalComment = trimmedComment.length > 0 ? trimmedComment.slice(0, 500) : null;
+
+    await this.bookService.updateReview({
+      userId: req.auth.userId,
+      bookId,
+      reviewId,
+      rating: parsedRating,
+      comment: finalComment,
+    });
+
+    sendSuccess(res, { updated: true });
+  };
+
+  deleteReview = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth?.userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const bookId = Number(req.params.bookId);
+    if (!Number.isInteger(bookId)) {
+      throw new AppError('Invalid bookId', 400);
+    }
+
+    const reviewId = Number(req.params.reviewId);
+    if (!Number.isInteger(reviewId)) {
+      throw new AppError('Invalid reviewId', 400);
+    }
+
+    await this.bookService.deleteReview({
+      userId: req.auth.userId,
+      bookId,
+      reviewId,
+    });
+
+    sendSuccess(res, { deleted: true });
+  };
+
   report = async (req: Request, res: Response): Promise<void> => {
     if (!req.auth?.userId) {
       throw new AppError('Unauthorized', 401);

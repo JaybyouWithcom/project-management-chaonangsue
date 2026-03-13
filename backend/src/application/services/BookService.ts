@@ -106,6 +106,7 @@ interface RentalRow extends RowDataPacket {
   return_delivery_proof_path: string | null;
   review_id: number | null;
   review_rating: number | null;
+  review_comment: string | null;
 }
 
 export interface RentalListItem {
@@ -139,6 +140,7 @@ export interface RentalListItem {
   returnDeliveryProofPath: string | null;
   reviewId: number | null;
   reviewRating: number | null;
+  reviewComment: string | null;
 }
 
 const mapRentalRow = (row: RentalRow): RentalListItem => ({
@@ -172,6 +174,7 @@ const mapRentalRow = (row: RentalRow): RentalListItem => ({
     returnDeliveryProofPath: row.return_delivery_proof_path,
     reviewId: row.review_id,
     reviewRating: row.review_rating !== null ? Number(row.review_rating) : null,
+    reviewComment: row.review_comment ?? null,
 });
 
 interface ReviewRow extends RowDataPacket {
@@ -693,6 +696,7 @@ export class BookService {
         r.return_delivery_proof_path,
         rv.review_id,
         rv.rating AS review_rating,
+        rv.comment AS review_comment,
         CASE
           WHEN r.status = 'กำลังยืม' AND r.due_date IS NOT NULL AND r.due_date < NOW() THEN 'เลยกำหนด'
           ELSE r.status
@@ -763,6 +767,7 @@ export class BookService {
         r.return_delivery_proof_path,
         NULL AS review_id,
         NULL AS review_rating,
+        NULL AS review_comment,
         CASE
           WHEN r.status = 'กำลังยืม' AND r.due_date IS NOT NULL AND r.due_date < NOW() THEN 'เลยกำหนด'
           ELSE r.status
@@ -872,6 +877,103 @@ export class BookService {
       await connection.commit();
 
       return { reviewId: result.insertId };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async updateReview(input: {
+    userId: number;
+    bookId: number;
+    reviewId: number;
+    rating: number;
+    comment?: string | null;
+  }): Promise<void> {
+    const connection = await dbPool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const [reviewRows] = await connection.query<Array<{
+        review_id: number;
+        book_id: number;
+        user_id: number;
+      } & RowDataPacket>>(
+        `
+        SELECT review_id, book_id, user_id
+        FROM reviews
+        WHERE review_id = ?
+        FOR UPDATE
+        `,
+        [input.reviewId],
+      );
+
+      if (reviewRows.length === 0) {
+        throw new AppError('Review not found', 404);
+      }
+
+      const review = reviewRows[0];
+      if (review.user_id !== input.userId) {
+        throw new AppError('Unauthorized', 403);
+      }
+      if (review.book_id !== input.bookId) {
+        throw new AppError('Invalid review for this book', 400);
+      }
+
+      await connection.query(
+        'UPDATE reviews SET rating = ?, comment = ? WHERE review_id = ?',
+        [input.rating, input.comment ?? null, input.reviewId],
+      );
+
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async deleteReview(input: {
+    userId: number;
+    bookId: number;
+    reviewId: number;
+  }): Promise<void> {
+    const connection = await dbPool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const [reviewRows] = await connection.query<Array<{
+        review_id: number;
+        book_id: number;
+        user_id: number;
+      } & RowDataPacket>>(
+        `
+        SELECT review_id, book_id, user_id
+        FROM reviews
+        WHERE review_id = ?
+        FOR UPDATE
+        `,
+        [input.reviewId],
+      );
+
+      if (reviewRows.length === 0) {
+        throw new AppError('Review not found', 404);
+      }
+
+      const review = reviewRows[0];
+      if (review.user_id !== input.userId) {
+        throw new AppError('Unauthorized', 403);
+      }
+      if (review.book_id !== input.bookId) {
+        throw new AppError('Invalid review for this book', 400);
+      }
+
+      await connection.query('DELETE FROM reviews WHERE review_id = ?', [input.reviewId]);
+
+      await connection.commit();
     } catch (error) {
       await connection.rollback();
       throw error;

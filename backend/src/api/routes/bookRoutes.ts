@@ -70,6 +70,14 @@ export const buildBookRoutes = (bookController: BookController, authMiddleware: 
     bookController.createReview(req, res).catch(next);
   });
 
+  router.patch('/:bookId/reviews/:reviewId', authMiddleware, (req, res, next) => {
+    bookController.updateReview(req, res).catch(next);
+  });
+
+  router.delete('/:bookId/reviews/:reviewId', authMiddleware, (req, res, next) => {
+    bookController.deleteReview(req, res).catch(next);
+  });
+
   router.post('/:bookId/report', authMiddleware, (req, res, next) => {
     bookController.report(req, res).catch(next);
   });

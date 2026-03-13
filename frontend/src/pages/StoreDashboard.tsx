@@ -116,6 +116,7 @@ const StoreDashboard = () => {
   const [editingBook, setEditingBook] = useState<ApiBook | null>(null);
   const [deletingBook, setDeletingBook] = useState<ApiBook | null>(null);
   const [deleteBookConfirm, setDeleteBookConfirm] = useState("");
+  const [hiddenInventoryBookIds, setHiddenInventoryBookIds] = useState<Record<number, true>>({});
   const [editShopOpen, setEditShopOpen] = useState(false);
   const [deleteShopOpen, setDeleteShopOpen] = useState(false);
   const [shopForm, setShopForm] = useState({ shopName: "", description: "" });
@@ -131,7 +132,7 @@ const StoreDashboard = () => {
     isbn: "",
     genre: "",
     bookPrice: "",
-    bookCondition: "2",
+    bookCondition: "",
     description: "",
   });
 
@@ -144,7 +145,7 @@ const StoreDashboard = () => {
       isbn: "",
       genre: "",
       bookPrice: "",
-      bookCondition: "2",
+      bookCondition: "",
       description: "",
     });
   };
@@ -235,8 +236,10 @@ const StoreDashboard = () => {
         return acc;
       }, []);
 
-    return [...itemsFromBooks, ...itemsFromRentalsOnly];
-  }, [books, rentals]);
+    return [...itemsFromBooks, ...itemsFromRentalsOnly].filter(
+      (item) => !hiddenInventoryBookIds[item.bookId],
+    );
+  }, [books, rentals, hiddenInventoryBookIds]);
 
   const filteredBooks = useMemo(
     () =>
@@ -305,6 +308,7 @@ const StoreDashboard = () => {
         await apiPatch(`/api/books/${editingBook.bookId}`, {
           ...form,
           bookPrice: Number(form.bookPrice),
+          bookCondition: form.bookCondition.trim() ? form.bookCondition : null,
           imageBase64,
         }, token);
         toast({ title: "อัปเดตหนังสือสำเร็จ" });
@@ -313,6 +317,7 @@ const StoreDashboard = () => {
           ...form,
           shopId,
           bookPrice: Number(form.bookPrice),
+          bookCondition: form.bookCondition.trim() ? form.bookCondition : null,
           imageBase64,
         }, token);
         toast({ title: "เพิ่มหนังสือสำเร็จ! 📚" });
@@ -347,7 +352,7 @@ const StoreDashboard = () => {
       isbn: book.isbn ?? "",
       genre: book.genre ?? "",
       bookPrice: String(book.bookPrice ?? ""),
-      bookCondition: book.bookCondition ?? "2",
+      bookCondition: book.bookCondition ?? "",
       description: book.description ?? "",
     });
     setImageFile(null);
@@ -364,8 +369,12 @@ const StoreDashboard = () => {
     try {
       await apiDelete(`/api/books/${deletingBook.bookId}`, token);
       toast({ title: "ลบหนังสือสำเร็จ" });
+      setHiddenInventoryBookIds((prev) => ({ ...prev, [deletingBook.bookId]: true }));
       setDeletingBook(null);
       setDeleteBookConfirm("");
+      queryClient.setQueryData<ApiBook[]>(["admin-books", shopId], (prev) =>
+        prev ? prev.filter((book) => book.bookId !== deletingBook.bookId) : prev,
+      );
       await queryClient.invalidateQueries({ queryKey: ["admin-books", shopId] });
     } catch (error) {
       toast({
@@ -644,6 +653,7 @@ const StoreDashboard = () => {
                     </div>
                     <div><Label>ราคาหนังสือ</Label><Input type="number" value={form.bookPrice} onChange={(e) => setForm((p) => ({ ...p, bookPrice: e.target.value }))} /></div>
                   </div>
+                  <p className="text-xs text-muted-foreground">ระบบจะคำนวณอัตโนมัติ: มัดจำ 50% | เช่า 15 วัน 30% | เช่า 30 วัน 50%</p>
                   <div>
                     <Label>สภาพหนังสือ</Label>
                     <Select value={form.bookCondition} onValueChange={(bookCondition) => setForm((p) => ({ ...p, bookCondition }))}>
@@ -651,7 +661,6 @@ const StoreDashboard = () => {
                       <SelectContent>{conditionOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <p className="text-xs text-muted-foreground">ระบบจะคำนวณอัตโนมัติ: มัดจำ 50% | เช่า 15 วัน 30% | เช่า 30 วัน 50%</p>
                   <div><Label>รายละเอียด</Label><Input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} /></div>
                   <Button className="w-full bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleSaveBook}>
                     {editingBook ? "บันทึกการแก้ไข" : "บันทึก"}

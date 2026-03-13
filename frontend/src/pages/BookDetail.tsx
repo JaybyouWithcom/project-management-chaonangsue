@@ -1,4 +1,4 @@
-import { useNavigate, useParams, Link } from "react-router-dom";
+﻿import { useNavigate, useParams, Link } from "react-router-dom";
 import { ArrowLeft, Star, Calendar, Shield, CheckCircle2, Flag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -412,6 +412,7 @@ const BookDetail = () => {
   const book = detailQuery.data;
   const currentUserId = meQuery.data?.userId ?? null;
   const isOwnBook = Boolean(meQuery.data?.userId && meQuery.data.userId === book.ownerId);
+  const isRented = book.status !== "Available";
   const averageRating = Number(book.ratingAverage ?? 0);
   const reviewCount = Number(book.reviewCount ?? 0);
   const previewReviews = reviewsPreviewQuery.data?.reviews ?? [];
@@ -425,8 +426,15 @@ const BookDetail = () => {
         </Button>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
-          <div className="rounded-xl overflow-hidden border bg-muted aspect-[3/4] max-h-[600px]">
+          <div className="relative rounded-xl overflow-hidden border bg-muted aspect-[3/4] max-h-[600px]">
             <img src={resolveImageUrl(book.imagePath)} alt={book.title} className="w-full h-full object-cover" />
+            {isRented && (
+              <div className="absolute inset-0 bg-foreground/30 flex items-center justify-center">
+                <span className="bg-white text-foreground px-4 py-1.5 rounded-full text-sm font-semibold shadow">
+                  ถูกเช่าอยู่
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-6">
@@ -437,6 +445,7 @@ const BookDetail = () => {
                 size="sm"
                 className="absolute right-0 top-0"
                 onClick={() => setIsReportOpen(true)}
+                disabled={isRented}
               >
                 <Flag className="mr-2 h-4 w-4" />
                 รายงาน
@@ -464,12 +473,12 @@ const BookDetail = () => {
                 <Star className="h-5 w-5 fill-current" />
                 <span className="text-lg font-bold">{reviewCount > 0 ? averageRating.toFixed(1) : "0.0"}</span>
               </div>
-              <span className="text-sm text-muted-foreground">สถานะ: {book.status === 'Available' ? 'พร้อมให้เช่า' : 'ไม่พร้อม'}</span>
+              <span className="text-sm text-muted-foreground">สถานะ: {book.status === 'Available' ? 'พร้อมให้เช่า' : 'ไม่พร้อมให้เช่า'}</span>
             </div>
 
             <p className="text-foreground/80 leading-relaxed">{book.description ?? 'ไม่มีคำอธิบายเพิ่มเติม'}</p>
 
-            <div className={`bg-card rounded-xl border p-5 space-y-5 ${isOwnBook ? "opacity-60" : ""}`}>
+            <div className={`bg-card rounded-xl border p-5 space-y-5 ${isOwnBook || isRented ? "opacity-60" : ""}`}>
               <div>
                 <h3 className="text-lg font-bold mb-1">เลือกแผนการเช่า</h3>
                 <p className="text-sm text-muted-foreground">ราคาหนังสือ: ฿{book.bookPrice}</p>
@@ -481,7 +490,7 @@ const BookDetail = () => {
                     key={plan}
                     variant={selectedPlan === plan ? "default" : "outline"}
                     onClick={() => setSelectedPlan(plan)}
-                    disabled={isOwnBook || book.status !== "Available"}
+                    disabled={isRented || isOwnBook}
                     className="h-auto py-4 flex flex-col items-center"
                   >
                     <span className="font-semibold">{planLabels[plan]}</span>
@@ -504,7 +513,7 @@ const BookDetail = () => {
                 <div className="flex items-center justify-between">
                   <Label>ที่อยู่จัดส่ง</Label>
                   {token && (
-                    <Button type="button" variant="outline" size="sm" onClick={() => navigate("/settings")}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => navigate("/settings")} disabled={isRented}>
                       เพิ่มที่อยู่
                     </Button>
                   )}
@@ -532,7 +541,7 @@ const BookDetail = () => {
               <Button
                 className="w-full h-11 text-base font-semibold"
                 onClick={() => { void handleBooking(); }}
-                disabled={!book.status || book.status !== 'Available' || submitting || isOwnBook || !selectedPlan || !selectedAddressId || !token}
+                disabled={isRented || submitting || isOwnBook || !selectedPlan || !selectedAddressId || !token}
               >
                 {submitting ? "กำลังทำรายการ..." : "เช่าและชำระเงิน"}
               </Button>
@@ -549,11 +558,11 @@ const BookDetail = () => {
                 <div>
                   <h3 className="text-lg font-bold">คนอื่น ๆ ว่ายังไงบ้าง?</h3>
                   <p className="text-sm text-muted-foreground">
-                    {reviewCount > 0 ? `คะแนนเฉลี่ย ${averageRating.toFixed(1)} จาก ${reviewCount} รีวิว` : "ยังไม่มีรีวิวสำหรับหนังสือเล่มนี้"}
+                    {reviewCount > 0 ? `คะแนนเฉลี่ย ${averageRating.toFixed(1)} จาก ${reviewCount} รีวิว` : "ยังไม่มีคะแนนสำหรับหนังสือเล่มนี้"}
                   </p>
                 </div>
                 {reviewCount > previewReviews.length && (
-                  <Button variant="outline" size="sm" onClick={() => setIsAllReviewsOpen(true)}>
+                  <Button variant="outline" size="sm" onClick={() => setIsAllReviewsOpen(true)} disabled={isRented}>
                     ดูทั้งหมด
                   </Button>
                 )}
@@ -584,10 +593,10 @@ const BookDetail = () => {
                       )}
                       {token && currentUserId === review.userId && (
                         <div className="mt-3 flex gap-2">
-                          <Button variant="secondary" size="sm" onClick={() => openEditReview(review)}>
+                          <Button variant="secondary" size="sm" onClick={() => openEditReview(review)} disabled={isRented}>
                             แก้ไขรีวิว
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => { void handleDeleteReview(review); }}>
+                          <Button variant="ghost" size="sm" onClick={() => { void handleDeleteReview(review); }} disabled={isRented}>
                             ลบรีวิว
                           </Button>
                         </div>
@@ -649,10 +658,10 @@ const BookDetail = () => {
               )}
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsReportOpen(false)}>
+              <Button variant="outline" onClick={() => setIsReportOpen(false)} disabled={isRented}>
                 ยกเลิก
               </Button>
-              <Button onClick={handleSubmitReport}>ส่งรายงาน</Button>
+              <Button onClick={handleSubmitReport} disabled={isRented}>ส่งรายงาน</Button>
             </div>
           </div>
         </DialogContent>
@@ -679,6 +688,7 @@ const BookDetail = () => {
                     onClick={() => setEditingRating(star)}
                     className="rounded p-1"
                     aria-label={`Rate ${star} stars`}
+                    disabled={isRented || reviewSubmitting}
                   >
                     <Star
                       className={star <= editingRating ? "h-5 w-5 text-accent fill-current" : "h-5 w-5 text-muted-foreground"}
@@ -699,10 +709,10 @@ const BookDetail = () => {
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditingReview(null)} disabled={reviewSubmitting}>
+              <Button variant="outline" onClick={() => setEditingReview(null)} disabled={isRented || reviewSubmitting}>
                 ยกเลิก
               </Button>
-              <Button onClick={() => { void handleUpdateReview(); }} disabled={reviewSubmitting}>
+              <Button onClick={() => { void handleUpdateReview(); }} disabled={isRented || reviewSubmitting}>
                 {reviewSubmitting ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
               </Button>
             </div>
@@ -750,3 +760,6 @@ const BookDetail = () => {
 };
 
 export default BookDetail;
+
+
+

@@ -94,8 +94,8 @@ export class MySqlBookRepository implements BookRepository {
   }
 
   async findAvailable(query: BookQuery): Promise<{ items: Book[]; total: number }> {
-    const whereClauses: string[] = ['b.status = ?', 'b.deleted_at IS NULL'];
-    const values: Array<string | number> = ['Available'];
+    const whereClauses: string[] = ['b.deleted_at IS NULL'];
+    const values: Array<string | number> = [];
 
     whereClauses.push('(b.shop_id IS NULL OR s.deleted_at IS NULL)');
 

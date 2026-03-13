@@ -1,4 +1,4 @@
-import { Star } from "lucide-react";
+﻿import { Star } from "lucide-react";
 import { Book } from "@/lib/mockData";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
@@ -21,8 +21,8 @@ const BookCard = ({ book }: BookCardProps) => (
       />
       {!book.available && (
         <div className="absolute inset-0 bg-foreground/50 flex items-center justify-center">
-          <span className="bg-destructive text-destructive-foreground px-3 py-1 rounded-full text-sm font-semibold">
-            เช่าหมดแล้ว
+          <span className="bg-white text-foreground px-4 py-1.5 rounded-full text-sm font-semibold shadow">
+            ถูกเช่าอยู่
           </span>
         </div>
       )}
@@ -49,3 +49,5 @@ const BookCard = ({ book }: BookCardProps) => (
 );
 
 export default BookCard;
+
+
